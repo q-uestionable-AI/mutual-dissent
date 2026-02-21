@@ -32,11 +32,13 @@ uv sync
 ## Usage
 
 ```bash
-questionable-ai ask "Your query here"
-questionable-ai ask "Your query here" --synthesizer claude
-questionable-ai ask "Your query here" --rounds 2
-questionable-ai ask "Your query here" --panel claude,gpt,gemini
+qai ask "Your query here"
+qai ask "Your query here" --synthesizer claude
+qai ask "Your query here" --rounds 2
+qai ask "Your query here" --panel claude,gpt,gemini
 ```
+
+`questionable-ai` also works as the full command name.
 
 ## Status
 

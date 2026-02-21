@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 questionable-ai = "questionable_ai.cli:main"
+qai = "questionable_ai.cli:main"
 
 [dependency-groups]
 dev = [
