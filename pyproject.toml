@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "questionable-ai"
+version = "0.1.0"
+description = "Cross-vendor multi-model debate and consensus engine for AI response distillation"
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = [
+    "httpx",
+    "click",
+    "rich",
+]
+
+[project.scripts]
+questionable-ai = "questionable_ai.cli:main"
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+    "pre-commit",
+    "pytest",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "N",
+    "W",
+    "B",
+    "C90",
+    "UP",
+    "S",
+]
+ignore = [
+    "S101",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S"]
+
+[tool.mypy]
+python_version = "3.14"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true

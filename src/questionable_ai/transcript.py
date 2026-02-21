@@ -1,0 +1,175 @@
+"""Transcript logging — JSON serialization and file storage.
+
+Writes complete debate transcripts as structured JSON files to the
+transcript directory (~/.questionable-ai/transcripts/). Supports
+saving, listing, and loading transcripts by ID.
+
+File naming convention: {date}_{short-id}.json
+Example: 2026-02-21_a1b2c3d4.json
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from questionable_ai.config import TRANSCRIPT_DIR, ensure_dirs
+from questionable_ai.models import DebateTranscript
+
+
+def save_transcript(transcript: DebateTranscript) -> Path:
+    """Save a debate transcript as a JSON file.
+
+    Args:
+        transcript: The completed debate transcript to save.
+
+    Returns:
+        Path to the saved JSON file.
+
+    Example::
+
+        path = save_transcript(transcript)
+        print(f"Saved to {path}")
+    """
+    ensure_dirs()
+    date_str = transcript.created_at.strftime("%Y-%m-%d")
+    filename = f"{date_str}_{transcript.short_id}.json"
+    filepath = TRANSCRIPT_DIR / filename
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(transcript.to_dict(), f, indent=2, ensure_ascii=False)
+
+    return filepath
+
+
+def load_transcript(transcript_id: str) -> DebateTranscript | None:
+    """Load a transcript by full or partial ID.
+
+    Searches the transcript directory for files matching the given ID
+    prefix. Partial IDs (minimum 4 characters) are supported.
+
+    Args:
+        transcript_id: Full UUID or prefix (min 4 chars) to match.
+
+    Returns:
+        DebateTranscript if found, None if no match.
+
+    Raises:
+        ValueError: If multiple transcripts match the prefix.
+    """
+    ensure_dirs()
+    matches = _find_transcript_files(transcript_id)
+
+    if not matches:
+        return None
+    if len(matches) > 1:
+        filenames = [m.name for m in matches]
+        raise ValueError(
+            f"Ambiguous transcript ID '{transcript_id}'. "
+            f"Matches: {', '.join(filenames)}. Use a longer prefix."
+        )
+
+    return _parse_transcript_file(matches[0])
+
+
+def list_transcripts(limit: int = 20) -> list[dict[str, str]]:
+    """List saved transcripts, most recent first.
+
+    Args:
+        limit: Maximum number of transcripts to return.
+
+    Returns:
+        List of dicts with 'id', 'short_id', 'date', 'query', and 'file' keys.
+    """
+    ensure_dirs()
+    files = sorted(TRANSCRIPT_DIR.glob("*.json"), reverse=True)
+
+    results = []
+    for filepath in files[:limit]:
+        try:
+            with open(filepath, encoding="utf-8") as f:
+                data = json.load(f)
+            results.append(
+                {
+                    "id": data.get("transcript_id", ""),
+                    "short_id": data.get("transcript_id", "")[:8],
+                    "date": data.get("created_at", "")[:10],
+                    "query": _truncate(data.get("query", ""), 80),
+                    "file": filepath.name,
+                }
+            )
+        except json.JSONDecodeError, KeyError:
+            continue
+
+    return results
+
+
+def _find_transcript_files(transcript_id: str) -> list[Path]:
+    """Find transcript files matching an ID prefix.
+
+    Args:
+        transcript_id: Full or partial transcript ID.
+
+    Returns:
+        List of matching file paths.
+    """
+    matches = []
+    for filepath in TRANSCRIPT_DIR.glob("*.json"):
+        # ID is embedded in filename after the date: {date}_{short-id}.json
+        # But we also check the full ID inside the file for longer prefixes.
+        name_parts = filepath.stem.split("_", 1)
+        if len(name_parts) == 2 and name_parts[1].startswith(transcript_id[:8]):
+            # Quick filename match — verify against full ID in file.
+            try:
+                with open(filepath, encoding="utf-8") as f:
+                    data = json.load(f)
+                full_id = data.get("transcript_id", "")
+                if full_id.startswith(transcript_id):
+                    matches.append(filepath)
+            except json.JSONDecodeError, KeyError:
+                continue
+    return matches
+
+
+def _parse_transcript_file(filepath: Path) -> DebateTranscript:
+    """Parse a JSON file into a DebateTranscript.
+
+    This is a minimal reconstruction — enough for replay and display.
+    Does not fully reconstruct nested dataclass instances; returns a
+    transcript with raw data accessible via to_dict() on the original.
+
+    Args:
+        filepath: Path to the transcript JSON file.
+
+    Returns:
+        DebateTranscript populated from the JSON data.
+    """
+    with open(filepath, encoding="utf-8") as f:
+        data = json.load(f)
+
+    transcript = DebateTranscript(
+        transcript_id=data["transcript_id"],
+        query=data["query"],
+        panel=data["panel"],
+        synthesizer_id=data["synthesizer_id"],
+        max_rounds=data["max_rounds"],
+        metadata=data.get("metadata", {}),
+    )
+    # Note: rounds and synthesis are left as empty/None for now.
+    # Full deserialization will be added when replay is implemented (Phase 2).
+    return transcript
+
+
+def _truncate(text: str, max_len: int) -> str:
+    """Truncate text with ellipsis if it exceeds max_len.
+
+    Args:
+        text: Input string.
+        max_len: Maximum length before truncation.
+
+    Returns:
+        Truncated string with '...' suffix, or original if short enough.
+    """
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3] + "..."
