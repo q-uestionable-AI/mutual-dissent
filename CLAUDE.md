@@ -107,3 +107,26 @@ Requires `OPENROUTER_API_KEY` environment variable. Set in PowerShell profile or
 - Reflection prompts include all other models' responses for that round
 - Synthesis prompt includes formatted transcript of entire debate history
 - CLI aliases: `qai` and `questionable-ai` both work
+
+## CLI Usage
+
+```powershell
+questionable-ai ask "Your query here"
+questionable-ai ask "Your query here" --synthesizer claude
+questionable-ai ask "Your query here" --rounds 2
+questionable-ai ask "Your query here" --panel claude,gpt,gemini
+qai ask "Your query here"    # short alias
+```
+
+After changes, smoke test: `questionable-ai --help`
+
+## Session Discipline
+
+- **Architecture.md:** Update at end of session if new modules, endpoints, or data models were introduced
+- **Running checks manually:**
+```powershell
+ruff check .
+ruff format --check .
+mypy src/questionable_ai/
+pre-commit run --all-files
+```
