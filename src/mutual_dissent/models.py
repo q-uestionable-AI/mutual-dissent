@@ -37,6 +37,12 @@ class ModelResponse:
         token_count: Total tokens used, if reported by API.
         latency_ms: Response time in milliseconds.
         error: Error message if the call failed, None on success.
+        role: Debate role — "initial", "reflection", or "synthesis".
+            Empty string when not set.
+        routing: Serialized RoutingDecision (via to_dict()). None when
+            not set. Stored as dict to keep models.py free of routing
+            type imports and simplify JSON deserialization.
+        analysis: Reserved for future scoring metadata. Empty dict for now.
     """
 
     model_id: str
@@ -47,6 +53,9 @@ class ModelResponse:
     token_count: int | None = None
     latency_ms: int | None = None
     error: str | None = None
+    role: str = ""
+    routing: dict[str, Any] | None = None
+    analysis: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary.
@@ -63,6 +72,9 @@ class ModelResponse:
             "token_count": self.token_count,
             "latency_ms": self.latency_ms,
             "error": self.error,
+            "role": self.role,
+            "routing": self.routing,
+            "analysis": self.analysis,
         }
 
 
@@ -100,13 +112,13 @@ class DebateTranscript:
     Attributes:
         transcript_id: Unique identifier (UUID4).
         query: Original user query.
-        panel: List of OpenRouter model IDs that participated.
-        synthesizer_id: Model ID selected for synthesis.
+        panel: List of model aliases that participated (e.g. ["claude", "gpt"]).
+        synthesizer_id: Model alias selected for synthesis (e.g. "claude").
         max_rounds: Configured number of reflection rounds.
         rounds: List of completed debate rounds.
         synthesis: Final synthesized response, if completed.
         created_at: When the debate started (UTC).
-        metadata: Additional context (version, config, etc.).
+        metadata: Additional context (version, resolved_config, stats, etc.).
     """
 
     transcript_id: str = field(default_factory=lambda: str(uuid.uuid4()))

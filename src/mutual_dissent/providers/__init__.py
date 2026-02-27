@@ -9,7 +9,8 @@ Re-exports the public interface so callers can write::
 from mutual_dissent.providers.anthropic import AnthropicProvider
 from mutual_dissent.providers.base import Provider
 from mutual_dissent.providers.openrouter import OpenRouterProvider
-from mutual_dissent.providers.router import ProviderRouter, RoutingDecision, Vendor
+from mutual_dissent.providers.router import ProviderRouter
+from mutual_dissent.types import RoutingDecision, Vendor
 
 __all__ = [
     "AnthropicProvider",
