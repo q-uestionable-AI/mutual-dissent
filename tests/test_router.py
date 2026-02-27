@@ -15,12 +15,8 @@ import pytest
 
 from mutual_dissent.config import Config
 from mutual_dissent.models import ModelResponse
-from mutual_dissent.providers.router import (
-    ProviderRouter,
-    RoutingDecision,
-    Vendor,
-    _resolve_vendor,
-)
+from mutual_dissent.providers.router import ProviderRouter, _resolve_vendor
+from mutual_dissent.types import RoutingDecision, Vendor
 
 ROUTER_LOGGER = "mutual_dissent.providers.router"
 
@@ -575,3 +571,50 @@ class TestImport:
         from mutual_dissent.providers import Vendor as Imported
 
         assert Imported is Vendor
+
+    def test_vendor_is_types_vendor(self) -> None:
+        """providers re-export is the canonical types.Vendor."""
+        from mutual_dissent.providers import Vendor as ProvidersVendor
+        from mutual_dissent.types import Vendor as TypesVendor
+
+        assert ProvidersVendor is TypesVendor
+
+    def test_routing_decision_is_types_routing_decision(self) -> None:
+        """providers re-export is the canonical types.RoutingDecision."""
+        from mutual_dissent.providers import RoutingDecision as ProvidersRD
+        from mutual_dissent.types import RoutingDecision as TypesRD
+
+        assert ProvidersRD is TypesRD
+
+
+# ---------------------------------------------------------------------------
+# Routing provenance on responses
+# ---------------------------------------------------------------------------
+
+
+class TestRoutingProvenance:
+    """complete() attaches routing info to every response."""
+
+    @pytest.mark.asyncio
+    async def test_routing_populated_on_success(self) -> None:
+        config = _make_config(openrouter_key="sk-or-test")
+        async with ProviderRouter(config) as router:
+            mock_resp = _mock_response("anthropic/claude-sonnet-4.5", "claude")
+            router._openrouter.complete = AsyncMock(return_value=mock_resp)  # type: ignore[union-attr]
+
+            result = await router.complete("claude", prompt="Hello")
+
+            assert result.routing is not None
+            assert result.routing["vendor"] == "anthropic"
+            assert "mode" in result.routing
+            assert "via_openrouter" in result.routing
+
+    @pytest.mark.asyncio
+    async def test_routing_populated_on_error(self) -> None:
+        config = _make_config()
+        async with ProviderRouter(config) as router:
+            result = await router.complete("claude", prompt="Hello")
+
+            assert result.error is not None
+            assert result.routing is not None
+            assert result.routing["vendor"] == "anthropic"

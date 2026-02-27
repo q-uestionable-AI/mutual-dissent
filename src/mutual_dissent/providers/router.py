@@ -29,9 +29,7 @@ Typical usage::
 from __future__ import annotations
 
 import asyncio
-import enum
 import logging
-from dataclasses import dataclass
 from typing import Any
 
 from mutual_dissent.config import Config
@@ -39,27 +37,13 @@ from mutual_dissent.models import ModelResponse
 from mutual_dissent.providers.anthropic import AnthropicProvider
 from mutual_dissent.providers.base import Provider
 from mutual_dissent.providers.openrouter import OpenRouterProvider
+from mutual_dissent.types import RoutingDecision, Vendor
 
 # Registry of vendors with direct provider implementations.
 # New vendors get added here as their providers are implemented.
 _DIRECT_PROVIDERS: dict[str, type[Provider]] = {
     "anthropic": AnthropicProvider,
 }
-
-
-class Vendor(enum.Enum):
-    """Known API vendors.
-
-    Values are the provider key strings used with
-    ``Config.get_provider_key()``.
-    """
-
-    ANTHROPIC = "anthropic"
-    OPENAI = "openai"
-    GOOGLE = "google"
-    XAI = "xai"
-    GROQ = "groq"
-    OPENROUTER = "openrouter"
 
 
 # OpenRouter model ID prefix → Vendor enum member.
@@ -70,22 +54,6 @@ _PREFIX_TO_VENDOR: dict[str, Vendor] = {
     "x-ai": Vendor.XAI,
     "groq": Vendor.GROQ,
 }
-
-
-@dataclass
-class RoutingDecision:
-    """Result of a routing determination.
-
-    Attributes:
-        vendor: The resolved vendor for the model.
-        mode: The routing mode that was applied
-            (``"auto"``, ``"direct"``, or ``"openrouter"``).
-        via_openrouter: Whether the request will be sent through OpenRouter.
-    """
-
-    vendor: Vendor
-    mode: str
-    via_openrouter: bool
 
 
 def _resolve_vendor(alias_or_id: str, config: Config) -> Vendor:
@@ -273,9 +241,11 @@ class ProviderRouter:
         decision = self.route(alias_or_id)
         alias = model_alias or alias_or_id
 
+        routing_dict = decision.to_dict()
+
         if decision.via_openrouter:
             if self._openrouter is None:
-                return ModelResponse(
+                response = ModelResponse(
                     model_id=alias_or_id,
                     model_alias=alias,
                     round_number=round_number,
@@ -286,34 +256,42 @@ class ProviderRouter:
                         "provider available"
                     ),
                 )
+                response.routing = routing_dict
+                return response
             model_id = self._config.resolve_model(alias_or_id)
-            return await self._openrouter.complete(
+            response = await self._openrouter.complete(
                 model_id,
                 messages=messages,
                 prompt=prompt,
                 model_alias=alias,
                 round_number=round_number,
             )
+            response.routing = routing_dict
+            return response
 
         # Direct provider path.
         vendor_key = decision.vendor.value
         provider = self._providers.get(vendor_key)
         if provider is None:
-            return ModelResponse(
+            response = ModelResponse(
                 model_id=alias_or_id,
                 model_alias=alias,
                 round_number=round_number,
                 content="",
                 error=f"No direct provider available for vendor '{vendor_key}'",
             )
+            response.routing = routing_dict
+            return response
         model_id = self._config.resolve_model(alias_or_id, direct=True)
-        return await provider.complete(
+        response = await provider.complete(
             model_id,
             messages=messages,
             prompt=prompt,
             model_alias=alias,
             round_number=round_number,
         )
+        response.routing = routing_dict
+        return response
 
     async def complete_parallel(
         self,

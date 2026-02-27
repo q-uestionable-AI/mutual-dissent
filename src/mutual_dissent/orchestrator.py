@@ -17,6 +17,8 @@ Typical usage::
 
 from __future__ import annotations
 
+from typing import Any
+
 from mutual_dissent import __version__
 from mutual_dissent.config import Config
 from mutual_dissent.models import DebateRound, DebateTranscript, ModelResponse
@@ -77,6 +79,8 @@ async def run_debate(
     async with ProviderRouter(config) as router:
         # --- Initial round ---
         initial_responses = await _run_initial_round(router, query, panel_aliases)
+        for r in initial_responses:
+            r.role = "initial"
         transcript.rounds.append(
             DebateRound(round_number=0, round_type="initial", responses=initial_responses)
         )
@@ -87,6 +91,8 @@ async def run_debate(
             reflection_responses = await _run_reflection_round(
                 router, query, panel_aliases, prev_responses, round_num
             )
+            for r in reflection_responses:
+                r.role = "reflection"
             transcript.rounds.append(
                 DebateRound(
                     round_number=round_num,
@@ -98,7 +104,20 @@ async def run_debate(
 
         # --- Synthesis ---
         synthesis = await _run_synthesis(router, query, synth_alias, transcript)
+        synthesis.role = "synthesis"
         transcript.synthesis = synthesis
+
+    # --- Metadata: resolved_config ---
+    transcript.metadata["resolved_config"] = {
+        "panel": list(panel_aliases),
+        "synthesizer": synth_alias,
+        "rounds": num_rounds,
+        "routing": dict(config.routing),
+        "providers": list(config.providers.keys()),
+    }
+
+    # --- Metadata: stats ---
+    transcript.metadata["stats"] = _compute_stats(transcript)
 
     return transcript
 
@@ -221,3 +240,38 @@ async def _run_synthesis(
         model_alias=synth_alias,
         round_number=-1,
     )
+
+
+def _compute_stats(transcript: DebateTranscript) -> dict[str, Any]:
+    """Compute aggregate stats for a completed debate transcript.
+
+    Args:
+        transcript: Completed debate transcript with all rounds and synthesis.
+
+    Returns:
+        Dictionary with total_tokens, per_model breakdown, and placeholders
+        for total_cost_usd and convergence metrics.
+    """
+    total_tokens = 0
+    per_model: dict[str, dict[str, int]] = {}
+
+    all_responses: list[ModelResponse] = []
+    for rnd in transcript.rounds:
+        all_responses.extend(rnd.responses)
+    if transcript.synthesis:
+        all_responses.append(transcript.synthesis)
+
+    for r in all_responses:
+        tokens = r.token_count or 0
+        total_tokens += tokens
+        if r.model_alias not in per_model:
+            per_model[r.model_alias] = {"tokens": 0, "calls": 0}
+        per_model[r.model_alias]["tokens"] += tokens
+        per_model[r.model_alias]["calls"] += 1
+
+    return {
+        "total_tokens": total_tokens,
+        "per_model": per_model,
+        "total_cost_usd": None,
+        "convergence": {},
+    }
