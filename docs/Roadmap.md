@@ -40,23 +40,63 @@ starting with Anthropic.
 built after this (replay, cost tracking, GUI) depends on the provider interface.
 Refactoring later means rewriting integrations.
 
+**Build order:** Config schema first (drives router interface) → core types →
+Provider ABC → OpenRouterProvider refactor → AnthropicProvider → ProviderRouter →
+schema upgrades → routing smoke test.
+
 **Deliverables:**
-- `Provider` abstract base class with `complete()` / `complete_parallel()`
+
+*Core types:*
+- `Vendor` enum (`ANTHROPIC`, `OPENAI`, `GOOGLE`, `XAI`, `GROQ`, `OPENROUTER`, `OLLAMA`)
+- `RoutedRequest` dataclass (`vendor`, `model_id`, `model_alias`, `round_number`, `messages`)
+- `RoutingDecision` dataclass (`vendor`, `mode`, `via_openrouter`)
+
+*Provider abstraction:*
+- `Provider` ABC with `complete()` accepting `messages` or `prompt` (exactly one), plus `complete_parallel()`
 - `OpenRouterProvider` — refactored from existing `client.py`
 - `AnthropicProvider` — direct Anthropic Messages API client
-- `ProviderRouter` — dispatches model requests to correct provider
-- Config: `[providers]` section for per-vendor API keys
-- Config: `[routing]` section for per-model routing (auto/direct/openrouter)
+- `ProviderRouter` — resolves alias → routing decision → dispatches to correct provider. Groups `RoutedRequest` by provider for `complete_parallel`.
+
+*Config:*
+- Config schema with `[providers]`, `[routing]`, `[model_aliases]` sections
+- Per-alias dual model IDs: `claude.openrouter` and `claude.direct`
 - Env var support: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.
 - Backward compatibility: existing `api_key` field still works for OpenRouter
-- `provider` field added to `ModelResponse` and transcripts
+
+*Schema upgrades (concurrent with provider work):*
+- `ModelResponse.role` — `"initial"` | `"reflection"` | `"synthesis"`
+- `ModelResponse.routing` — serialized `RoutingDecision`
+- `ModelResponse.analysis` — empty dict, reserved for future scoring
+- `DebateTranscript.metadata.resolved_config` — full effective config (not hash)
+- `DebateTranscript.metadata.stats` — `total_tokens`, `per_model`, `total_cost_usd`, placeholder convergence fields
+- All timestamps UTC as `YYYY-MM-DDTHH:MM:SSZ`
+
+*Routing smoke test:*
+- `dissent config test` — for each alias: resolve routing → send minimal prompt → report provider, latency, errors
+
+*Minimal ProviderCapabilities:*
+- `max_context_tokens` only, pulled dynamically from OpenRouter `/api/v1/models`
+- No hardcoded pricing — model prices change weekly
 
 **Future provider stubs (not in this phase):**
-- OpenAI, Google, xAI — same `Provider` interface, implemented when needed
+- OpenAI, Google, xAI, Groq — same `Provider` interface, implemented when needed
 
-**Done when:** `mutual-dissent ask "test" --panel claude,gpt` routes Claude
-through Anthropic's API directly (if key is set) and GPT through OpenRouter,
-transparently. Existing config files continue to work unchanged.
+**Exit criteria:**
+- `dissent config test` passes for claude (direct) and gpt (OpenRouter)
+- Mixed-panel debate works end-to-end (at least one model direct, one via OpenRouter)
+- `provider` and `routing` info present in all transcript `ModelResponse` entries
+- `metadata.stats` precomputed and present in transcripts
+- `metadata.resolved_config` present in transcripts
+
+**Design decisions (multi-model review consensus):**
+
+| Decision | Rationale |
+|----------|-----------|
+| `resolved_config` dict over `config_hash` | Hash of TOML sections is fragile (ordering, whitespace). Full dict is more bytes, zero ambiguity. |
+| Dynamic pricing from OpenRouter API | Model prices change weekly. Hardcoded pricing = constant maintenance. |
+| Config schema before router implementation | Config shape drives the router interface, not the other way around. |
+| Schema upgrades concurrent with provider work | Avoids migration later. Richer schema from the first multi-provider transcript. |
+| Topology/roles/RAG deferred to Phase 3+ | They're the research payload — deferred because plumbing isn't ready, not because they're optional. |
 
 ---
 

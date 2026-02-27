@@ -97,6 +97,36 @@ All providers implement the same async interface:
 
 ```python
 from abc import ABC, abstractmethod
+from enum import Enum
+
+class Vendor(Enum):
+    """Supported inference providers."""
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    GOOGLE = "google"
+    XAI = "xai"
+    GROQ = "groq"
+    OPENROUTER = "openrouter"
+    OLLAMA = "ollama"
+
+
+@dataclass
+class RoutedRequest:
+    """A model request annotated with routing info."""
+    vendor: Vendor
+    model_id: str
+    model_alias: str
+    round_number: int
+    messages: list[dict[str, Any]]
+
+
+@dataclass
+class RoutingDecision:
+    """How a request was routed."""
+    vendor: Vendor
+    mode: str           # "auto" | "direct" | "openrouter"
+    via_openrouter: bool
+
 
 class Provider(ABC):
     """Base class for all model API providers."""
@@ -105,11 +135,18 @@ class Provider(ABC):
     async def complete(
         self,
         model_id: str,
-        prompt: str,
         *,
+        messages: list[dict[str, Any]] | None = None,
+        prompt: str | None = None,
         model_alias: str = "",
         round_number: int = 0,
-    ) -> ModelResponse: ...
+    ) -> ModelResponse:
+        """Send a completion request.
+
+        Accepts either `messages` (list of chat messages) or `prompt`
+        (single user message string). Exactly one must be provided.
+        """
+        ...
 
     async def complete_parallel(
         self,
@@ -136,10 +173,18 @@ class Provider(ABC):
 | Google | `providers/google.py` | API key param | `generativelanguage.googleapis.com` | Gemini family |
 | xAI | `providers/xai.py` | Bearer token | `api.x.ai/v1/chat/completions` | Grok family |
 | Groq | `providers/groq.py` | Bearer token | `api.groq.com/openai/v1/chat/completions` | Llama, Mixtral, DeepSeek |
+| Ollama | `providers/ollama.py` | None (local) | `http://10.0.40.20:11434/api/chat` | Open-weight models |
 
-**Implementation order:** OpenRouter (refactor from existing client.py) → Anthropic → others (OpenAI, Google, xAI, Groq) as needed.
+**Implementation order:** OpenRouter (refactor from existing client.py) → Anthropic → others as needed.
 
 Each provider normalizes vendor-specific response formats into `ModelResponse`. The Orchestrator never sees raw API responses.
+
+### Provider Capabilities
+
+Minimal for Phase 1.5 — only `max_context_tokens`, pulled dynamically from
+OpenRouter's `/api/v1/models` endpoint. No hardcoded pricing or capability
+matrices. Extended capabilities (`supports_tools`, `supports_vision`,
+`supports_json_mode`, detailed pricing) deferred to Phase 4.
 
 ### Provider Router
 
@@ -160,6 +205,9 @@ class ProviderRouter:
     - "direct": Use the vendor's native API only. Error if no key.
     - "openrouter": Always route through OpenRouter regardless of
       available direct keys.
+
+    Attaches a RoutingDecision to every ModelResponse for transcript
+    provenance.
     """
 ```
 
@@ -197,38 +245,43 @@ Model alias → vendor mapping (hardcoded: claude→anthropic, gpt→openai, etc
 `~/.mutual-dissent/config.toml`
 
 ```toml
-# Legacy — still works, maps to providers.openrouter.api_key
+# Legacy — still works, maps to providers.openrouter_api_key
 api_key = "sk-or-..."
 
 [providers]
 # Direct vendor API keys. Each also checks its env var.
 # Env vars: OPENROUTER_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY,
 #           GOOGLE_API_KEY, XAI_API_KEY, GROQ_API_KEY
-openrouter = "sk-or-..."
-anthropic = ""     # or set ANTHROPIC_API_KEY env var
-# openai = ""      # future
-# google = ""       # future
-# xai = ""          # future
-# groq = ""         # future
+openrouter_api_key = "sk-or-..."
+anthropic_api_key = ""     # or set ANTHROPIC_API_KEY env var
+# openai_api_key = ""      # future
+# google_api_key = ""       # future
+# xai_api_key = ""          # future
+# groq_api_key = ""         # future
 
 [routing]
 # Per-model routing: "auto" | "direct" | "openrouter"
 # Default for all models is "auto"
+default_mode = "auto"
 claude = "auto"
 gpt = "openrouter"
 gemini = "openrouter"
 grok = "openrouter"
 
+[model_aliases]
+# Dual IDs per alias: OpenRouter format and vendor-native format.
+# Verify against vendor docs and OpenRouter before hardcoding — IDs change.
+claude.openrouter = "anthropic/claude-sonnet-4-5"
+claude.direct = "claude-sonnet-4-5-20250929"
+gpt.openrouter = "openai/gpt-4.1"
+gpt.direct = "gpt-4.1"
+gemini.openrouter = "google/gemini-2.5-pro"
+grok.openrouter = "x-ai/grok-3"
+
 [defaults]
 panel = ["claude", "gpt", "gemini", "grok"]
 synthesizer = "claude"
 rounds = 1
-
-[model_aliases]
-claude = "anthropic/claude-sonnet-4-5"
-gpt = "openai/gpt-5.2"
-gemini = "google/gemini-2.5-pro"
-grok = "x-ai/grok-4"
 ```
 
 **Backward compatibility:** The top-level `api_key` field continues to work and
@@ -264,12 +317,15 @@ class ModelResponse:
     model_id: str           # Provider-specific model identifier
     model_alias: str        # Human-readable name (e.g., "claude", "gpt")
     round_number: int       # 0 = initial, 1+ = reflection, -1 = synthesis
+    role: str               # "initial" | "reflection" | "synthesis"
     content: str            # Full response text
     timestamp: datetime     # When response was received (UTC)
     token_count: int | None = None      # Tokens used (if available)
     latency_ms: int | None = None       # Response time in milliseconds
     error: str | None = None            # Error message if call failed
-    provider: str | None = None         # Which provider handled this call
+    provider: str | None = None         # Vendor enum value
+    routing: dict | None = None         # Serialized RoutingDecision
+    analysis: dict = field(default_factory=dict)  # Reserved for scoring
 
 
 @dataclass
@@ -291,7 +347,15 @@ class DebateTranscript:
     rounds: list[DebateRound] = field(default_factory=list)
     synthesis: ModelResponse | None = None
     created_at: datetime = field(default_factory=datetime.now)
-    metadata: dict = field(default_factory=dict)  # Version, config, etc.
+    metadata: dict = field(default_factory=dict)
+    # metadata includes:
+    #   version: str
+    #   resolved_config: dict       — full effective config snapshot
+    #   providers_used: list[str]
+    #   stats: dict                 — precomputed on write:
+    #     total_tokens, per_model token counts,
+    #     total_cost_usd (if derivable),
+    #     rounds_to_convergence, disagreement_count (placeholders)
 ```
 
 ---
@@ -304,7 +368,7 @@ class DebateTranscript:
 {
   "transcript_id": "uuid",
   "query": "user's original question",
-  "panel": ["anthropic/claude-sonnet-4-5", "openai/gpt-5.2"],
+  "panel": ["anthropic/claude-sonnet-4-5", "openai/gpt-4.1"],
   "synthesizer_id": "anthropic/claude-sonnet-4-5",
   "max_rounds": 1,
   "created_at": "2026-02-21T15:30:00Z",
@@ -317,20 +381,35 @@ class DebateTranscript:
           "model_id": "anthropic/claude-sonnet-4-5",
           "model_alias": "claude",
           "round_number": 0,
+          "role": "initial",
           "content": "...",
           "timestamp": "2026-02-21T15:30:01Z",
           "token_count": 450,
           "latency_ms": 2100,
           "error": null,
-          "provider": "anthropic"
+          "provider": "anthropic",
+          "routing": {
+            "vendor": "anthropic",
+            "mode": "auto",
+            "via_openrouter": false
+          },
+          "analysis": {}
         }
       ]
     }
   ],
   "synthesis": { "..." },
   "metadata": {
-    "version": "0.1.0",
-    "providers_used": ["anthropic", "openrouter"]
+    "version": "0.2.0",
+    "providers_used": ["anthropic", "openrouter"],
+    "resolved_config": { "..." },
+    "stats": {
+      "total_tokens": 4200,
+      "per_model": { "claude": 1800, "gpt": 2400 },
+      "total_cost_usd": null,
+      "rounds_to_convergence": null,
+      "disagreement_count": null
+    }
   }
 }
 ```
@@ -356,6 +435,7 @@ mutual-dissent
   list        List saved transcripts
   show        Display a transcript
   config      Manage default settings
+  config test Smoke-test routing for all configured aliases
   serve       Start the web UI server
 ```
 
@@ -395,15 +475,15 @@ mutual-dissent replay <transcript-id> --synthesizer grok --rounds 1
 
 ### Model Aliases
 
-| Alias | OpenRouter Model ID | Direct Provider |
-|-------|---------------------|-----------------|
-| `claude` | `anthropic/claude-sonnet-4-5` | Anthropic Messages API |
-| `gpt` | `openai/gpt-5.2` | OpenAI Chat API |
-| `gemini` | `google/gemini-2.5-pro` | Google Generative AI API |
-| `grok` | `x-ai/grok-4` | xAI Chat API |
+| Alias | OpenRouter Model ID | Direct Model ID | Direct Provider |
+|-------|---------------------|-----------------|-----------------|
+| `claude` | `anthropic/claude-sonnet-4-5` | `claude-sonnet-4-5-20250929` | Anthropic Messages API |
+| `gpt` | `openai/gpt-4.1` | `gpt-4.1` | OpenAI Chat API |
+| `gemini` | `google/gemini-2.5-pro` | — | Google Generative AI API |
+| `grok` | `x-ai/grok-3` | — | xAI Chat API |
 
-Model IDs verified against OpenRouter offerings as of 2026-02-21. Direct provider
-model IDs may differ from OpenRouter IDs — each provider maps accordingly.
+Model IDs are placeholders — verify against OpenRouter and vendor docs before
+implementation. IDs change frequently.
 
 
 ---
