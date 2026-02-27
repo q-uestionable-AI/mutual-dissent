@@ -451,10 +451,12 @@ class TestMixedParallel:
                 return_value=openrouter_resp,
             )
 
-            results = await router.complete_parallel([
-                {"alias_or_id": "claude", "prompt": "Hello from Claude"},
-                {"alias_or_id": "gpt", "prompt": "Hello from GPT"},
-            ])
+            results = await router.complete_parallel(
+                [
+                    {"alias_or_id": "claude", "prompt": "Hello from Claude"},
+                    {"alias_or_id": "gpt", "prompt": "Hello from GPT"},
+                ]
+            )
 
             assert len(results) == 2
             # claude goes to direct Anthropic provider.
@@ -471,9 +473,7 @@ class TestMixedParallel:
 
             call_count = 0
 
-            async def mock_complete(
-                model_id: str, **kwargs: object
-            ) -> ModelResponse:
+            async def mock_complete(model_id: str, **kwargs: object) -> ModelResponse:
                 nonlocal call_count
                 call_count += 1
                 if "claude" in model_id:
@@ -482,10 +482,12 @@ class TestMixedParallel:
 
             router._openrouter.complete = mock_complete  # type: ignore[union-attr, assignment]
 
-            results = await router.complete_parallel([
-                {"alias_or_id": "claude", "prompt": "First"},
-                {"alias_or_id": "gpt", "prompt": "Second"},
-            ])
+            results = await router.complete_parallel(
+                [
+                    {"alias_or_id": "claude", "prompt": "First"},
+                    {"alias_or_id": "gpt", "prompt": "Second"},
+                ]
+            )
 
             assert results[0].model_alias == "claude"
             assert results[1].model_alias == "gpt"
@@ -532,9 +534,7 @@ class TestWarningLogging:
         router = ProviderRouter(config)
         with caplog.at_level(logging.WARNING, logger=ROUTER_LOGGER):
             router.route("claude")
-        router_warnings = [
-            r for r in caplog.records if r.name == ROUTER_LOGGER
-        ]
+        router_warnings = [r for r in caplog.records if r.name == ROUTER_LOGGER]
         assert len(router_warnings) == 0
 
     def test_openrouter_mode_no_warning(
@@ -549,9 +549,7 @@ class TestWarningLogging:
         router = ProviderRouter(config)
         with caplog.at_level(logging.WARNING, logger=ROUTER_LOGGER):
             router.route("claude")
-        router_warnings = [
-            r for r in caplog.records if r.name == ROUTER_LOGGER
-        ]
+        router_warnings = [r for r in caplog.records if r.name == ROUTER_LOGGER]
         assert len(router_warnings) == 0
 
 
