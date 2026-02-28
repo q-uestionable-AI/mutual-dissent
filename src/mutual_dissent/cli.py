@@ -24,6 +24,7 @@ from mutual_dissent import __version__
 from mutual_dissent.config import CONFIG_PATH, Config, load_config
 from mutual_dissent.display import (
     format_markdown,
+    render_config_show,
     render_config_test,
     render_debate,
     render_transcript_list,
@@ -463,6 +464,39 @@ def config() -> None:
 def path() -> None:
     """Print the configuration file path."""
     click.echo(CONFIG_PATH)
+
+
+@config.command("show")
+@click.option(
+    "--check-models",
+    is_flag=True,
+    default=False,
+    help="Fetch model context lengths from OpenRouter (requires network).",
+)
+def config_show(check_models: bool) -> None:
+    """Display effective configuration."""
+    cfg = load_config()
+
+    context_lengths: dict[str, int] | None = None
+    if check_models:
+        from mutual_dissent.pricing import PricingCache
+
+        cache = PricingCache(alias_map=cfg._model_aliases_v2)
+
+        async def _fetch_lengths() -> dict[str, int]:
+            await cache.prefetch()
+            lengths: dict[str, int] = {}
+            for alias in cfg._model_aliases_v2:
+                or_id = cfg._model_aliases_v2[alias].get("openrouter", "")
+                if or_id:
+                    ctx = await cache.get_context_length(or_id)
+                    if ctx is not None:
+                        lengths[alias] = ctx
+            return lengths
+
+        context_lengths = asyncio.run(_fetch_lengths())
+
+    render_config_show(cfg, context_lengths=context_lengths)
 
 
 async def _run_config_test(

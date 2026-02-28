@@ -319,6 +319,45 @@ class TestConfigPath:
 
 
 # ---------------------------------------------------------------------------
+# config show subcommand
+# ---------------------------------------------------------------------------
+
+
+class TestConfigShow:
+    """config show subcommand."""
+
+    def test_config_show_in_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["config", "--help"])
+        assert result.exit_code == 0
+        assert "show" in result.output
+
+    def test_config_show_runs(self, monkeypatch) -> None:
+        """config show runs without error and shows key sections."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        runner = CliRunner()
+        result = runner.invoke(main, ["config", "show"])
+        assert result.exit_code == 0
+        assert "config.toml" in result.output
+
+    def test_config_show_never_exposes_full_key(self, monkeypatch) -> None:
+        """Full API key must never appear in config show output."""
+        full_key = "sk-or-v1-abcdefghijklmnopqrstuvwxyz1234567890"
+        monkeypatch.setenv("OPENROUTER_API_KEY", full_key)
+        runner = CliRunner()
+        result = runner.invoke(main, ["config", "show"])
+        assert result.exit_code == 0
+        assert full_key not in result.output
+
+    def test_config_show_check_models_flag_exists(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["config", "show", "--help"])
+        assert result.exit_code == 0
+        assert "check-models" in result.output
+
+
+# ---------------------------------------------------------------------------
 # render_config_show output
 # ---------------------------------------------------------------------------
 
