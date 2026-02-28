@@ -7,6 +7,7 @@ Typical usage::
 
     mutual-dissent ask "What is MCP security?"
     mutual-dissent ask "Compare REST vs GraphQL" --verbose --rounds 2
+    mutual-dissent replay abcd1234 --synthesizer gpt --rounds 1
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from mutual_dissent import __version__
 from mutual_dissent.config import Config, load_config
 from mutual_dissent.display import render_config_test, render_debate, render_transcript_list
 from mutual_dissent.models import ModelResponse
-from mutual_dissent.orchestrator import run_debate
+from mutual_dissent.orchestrator import run_debate, run_replay
 from mutual_dissent.providers.router import ProviderRouter
 from mutual_dissent.transcript import list_transcripts, load_transcript, save_transcript
 from mutual_dissent.types import RoutingDecision
@@ -203,6 +204,118 @@ def show(transcript_id: str, verbose: bool, output: str) -> None:
         )
         sys.exit(1)
 
+    if output == "json":
+        click.echo(json.dumps(transcript.to_dict(), indent=2))
+    else:
+        render_debate(transcript, verbose=verbose)
+
+
+@main.command()
+@click.argument("transcript_id")
+@click.option(
+    "--synthesizer",
+    default=None,
+    help="Model alias to override the original synthesizer.",
+)
+@click.option(
+    "--rounds",
+    default=0,
+    type=click.IntRange(0, 3),
+    help=(
+        "Additional reflection rounds before re-synthesis (default: 0). "
+        "Each round costs N API calls per panel model."
+    ),
+)
+@click.option(
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Show all round responses, not just synthesis.",
+)
+@click.option(
+    "--no-save",
+    is_flag=True,
+    default=False,
+    help="Don't save replay transcript to disk.",
+)
+@click.option(
+    "--output",
+    type=click.Choice(["terminal", "json"], case_sensitive=False),
+    default="terminal",
+    help="Output format (default: terminal).",
+)
+def replay(
+    transcript_id: str,
+    synthesizer: str | None,
+    rounds: int,
+    verbose: bool,
+    no_save: bool,
+    output: str,
+) -> None:
+    """Re-synthesize or extend an existing debate transcript.
+
+    Loads the transcript matching TRANSCRIPT_ID (full or partial, min 4
+    chars), optionally adds reflection rounds, then runs synthesis with
+    the original or overridden synthesizer. Produces a new transcript --
+    the original is never modified.
+
+    Args:
+        transcript_id: Full UUID or prefix (min 4 chars) to match.
+        synthesizer: Model alias override for synthesis.
+        rounds: Additional reflection rounds to run.
+        verbose: Show all round responses.
+        no_save: Skip saving replay transcript.
+        output: Output format choice.
+    """
+    # Validate transcript ID length (cheap check first).
+    if len(transcript_id) < 4:
+        console.print("[red bold]Error:[/red bold] Transcript ID must be at least 4 characters.")
+        sys.exit(1)
+
+    config = load_config()
+
+    # Validate API key -- replay makes live API calls.
+    if not config.api_key and not any(config.providers.values()):
+        console.print(
+            "[red bold]Error:[/red bold] No API key found.\n"
+            "Set OPENROUTER_API_KEY (or another provider key) environment variable\n"
+            "or configure keys in ~/.mutual-dissent/config.toml"
+        )
+        sys.exit(1)
+
+    # Load source transcript.
+    try:
+        source = load_transcript(transcript_id)
+    except ValueError as exc:
+        console.print(f"[red bold]Error:[/red bold] {exc}")
+        sys.exit(1)
+
+    if source is None:
+        console.print(
+            f"[red bold]Error:[/red bold] No transcript found matching '{transcript_id}'."
+        )
+        sys.exit(1)
+
+    # Run replay.
+    try:
+        transcript = asyncio.run(
+            run_replay(
+                source,
+                config,
+                synthesizer=synthesizer,
+                additional_rounds=rounds,
+            )
+        )
+    except Exception as exc:
+        console.print(f"[red bold]Error:[/red bold] {exc}")
+        sys.exit(1)
+
+    # Save unless --no-save.
+    if not no_save:
+        filepath = save_transcript(transcript)
+        console.print(f"[dim]Replay transcript saved: {filepath.name}[/dim]")
+
+    # Render output.
     if output == "json":
         click.echo(json.dumps(transcript.to_dict(), indent=2))
     else:
