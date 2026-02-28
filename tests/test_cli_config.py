@@ -316,3 +316,118 @@ class TestConfigPath:
         assert result.exit_code == 0
         assert ".mutual-dissent" in result.output
         assert "config.toml" in result.output
+
+
+# ---------------------------------------------------------------------------
+# render_config_show output
+# ---------------------------------------------------------------------------
+
+
+class TestRenderConfigShow:
+    """render_config_show() display function."""
+
+    def _capture(self, config, context_lengths=None):
+        """Helper to capture render_config_show output."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        import mutual_dissent.display as display_mod
+
+        buf = StringIO()
+        test_console = Console(file=buf, force_terminal=True, width=120)
+        original_console = display_mod.console
+        display_mod.console = test_console
+        try:
+            from mutual_dissent.display import render_config_show
+
+            render_config_show(config, context_lengths=context_lengths)
+        finally:
+            display_mod.console = original_console
+        return buf.getvalue()
+
+    def test_shows_config_path(self) -> None:
+        from mutual_dissent.config import Config
+
+        config = Config()
+        output = self._capture(config)
+        assert "config.toml" in output
+
+    def test_shows_panel(self) -> None:
+        from mutual_dissent.config import Config
+
+        config = Config()
+        output = self._capture(config)
+        assert "claude" in output
+        assert "gpt" in output
+
+    def test_shows_synthesizer(self) -> None:
+        from mutual_dissent.config import Config
+
+        config = Config()
+        output = self._capture(config)
+        assert "claude" in output
+
+    def test_shows_rounds(self) -> None:
+        from mutual_dissent.config import Config
+
+        config = Config()
+        output = self._capture(config)
+        # Default rounds is 1
+        assert "1" in output
+
+    def test_masks_api_key(self) -> None:
+        """API keys must be masked -- never shown in full."""
+        from mutual_dissent.config import Config
+
+        config = Config()
+        full_key = "sk-or-v1-abcdefghijklmnopqrstuvwxyz1234567890"
+        config.providers["openrouter"] = full_key
+        output = self._capture(config)
+        # Full key must NOT appear.
+        assert full_key not in output
+        # Masked form should appear.
+        assert "sk-or-" in output
+        assert "7890" in output
+
+    def test_shows_not_configured(self) -> None:
+        """Providers without keys show 'not configured'."""
+        from mutual_dissent.config import Config
+
+        config = Config()
+        config.providers = {}
+        output = self._capture(config)
+        assert "not configured" in output.lower()
+
+    def test_shows_provider_source_env(self, monkeypatch) -> None:
+        """Provider key from env var shows 'env' source."""
+        from mutual_dissent.config import load_config
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-testkey12345678")
+        config = load_config()
+        output = self._capture(config)
+        assert "env" in output.lower()
+
+    def test_shows_model_aliases(self) -> None:
+        """Model aliases section shows alias to model ID mappings."""
+        from mutual_dissent.config import Config
+
+        config = Config()
+        output = self._capture(config)
+        assert "anthropic/claude-sonnet-4.5" in output
+
+    def test_shows_routing_mode(self) -> None:
+        from mutual_dissent.config import Config
+
+        config = Config()
+        output = self._capture(config)
+        assert "auto" in output
+
+    def test_shows_context_length(self) -> None:
+        """Context lengths shown when provided."""
+        from mutual_dissent.config import Config
+
+        config = Config()
+        context_lengths = {"claude": 200000}
+        output = self._capture(config, context_lengths=context_lengths)
+        assert "200,000" in output or "200000" in output
