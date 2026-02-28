@@ -205,6 +205,8 @@ def _parse_response(data: dict[str, Any]) -> ModelResponse:
         content=data["content"],
         timestamp=_parse_datetime(data.get("timestamp", "")),
         token_count=data.get("token_count"),
+        input_tokens=data.get("input_tokens"),
+        output_tokens=data.get("output_tokens"),
         latency_ms=data.get("latency_ms"),
         error=data.get("error"),
         role=data.get("role", ""),

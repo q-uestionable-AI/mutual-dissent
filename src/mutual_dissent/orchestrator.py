@@ -22,6 +22,7 @@ from typing import Any
 from mutual_dissent import __version__
 from mutual_dissent.config import Config
 from mutual_dissent.models import DebateRound, DebateTranscript, ModelResponse
+from mutual_dissent.pricing import PricingCache, compute_response_cost
 from mutual_dissent.prompts import (
     RoundSummary,
     format_initial,
@@ -80,7 +81,12 @@ async def run_debate(
         metadata={"version": __version__},
     )
 
+    pricing_cache = PricingCache(alias_map=config._model_aliases_v2)
+
     async with ProviderRouter(config) as router:
+        # --- Pricing prefetch (fetches before rounds begin) ---
+        await pricing_cache.prefetch()
+
         # --- Initial round ---
         initial_responses = await _run_initial_round(router, query, panel_aliases)
         for r in initial_responses:
@@ -133,7 +139,7 @@ async def run_debate(
     }
 
     # --- Metadata: stats ---
-    transcript.metadata["stats"] = _compute_stats(transcript)
+    transcript.metadata["stats"] = await _compute_stats(transcript, pricing_cache)
 
     return transcript
 
@@ -188,7 +194,12 @@ async def run_replay(
         metadata={"version": __version__},
     )
 
+    pricing_cache = PricingCache(alias_map=config._model_aliases_v2)
+
     async with ProviderRouter(config) as router:
+        # --- Pricing prefetch ---
+        await pricing_cache.prefetch()
+
         # --- Additional reflection rounds ---
         if additional_rounds > 0:
             prev_responses = source.rounds[-1].responses
@@ -233,7 +244,7 @@ async def run_replay(
         "synthesizer_override": synthesizer,
         "additional_rounds": additional_rounds,
     }
-    transcript.metadata["stats"] = _compute_stats(transcript)
+    transcript.metadata["stats"] = await _compute_stats(transcript, pricing_cache)
 
     return transcript
 
@@ -358,18 +369,25 @@ async def _run_synthesis(
     )
 
 
-def _compute_stats(transcript: DebateTranscript) -> dict[str, Any]:
+async def _compute_stats(
+    transcript: DebateTranscript,
+    pricing_cache: PricingCache | None = None,
+) -> dict[str, Any]:
     """Compute aggregate stats for a completed debate transcript.
 
     Args:
         transcript: Completed debate transcript with all rounds and synthesis.
+        pricing_cache: Optional pricing cache for cost computation.
 
     Returns:
-        Dictionary with total_tokens, per_model breakdown, and placeholders
-        for total_cost_usd and convergence metrics.
+        Dictionary with total_tokens, per_model breakdown (including
+        input/output token split and cost), total_cost_usd, and
+        convergence placeholder.
     """
     total_tokens = 0
-    per_model: dict[str, dict[str, int]] = {}
+    total_cost: float = 0.0
+    has_any_cost = False
+    per_model: dict[str, dict[str, Any]] = {}
 
     all_responses: list[ModelResponse] = []
     for rnd in transcript.rounds:
@@ -380,14 +398,33 @@ def _compute_stats(transcript: DebateTranscript) -> dict[str, Any]:
     for r in all_responses:
         tokens = r.token_count or 0
         total_tokens += tokens
+
         if r.model_alias not in per_model:
-            per_model[r.model_alias] = {"tokens": 0, "calls": 0}
-        per_model[r.model_alias]["tokens"] += tokens
-        per_model[r.model_alias]["calls"] += 1
+            per_model[r.model_alias] = {
+                "tokens": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "calls": 0,
+                "cost_usd": 0.0,
+            }
+        entry = per_model[r.model_alias]
+        entry["tokens"] += tokens
+        entry["input_tokens"] += r.input_tokens or 0
+        entry["output_tokens"] += r.output_tokens or 0
+        entry["calls"] += 1
+
+        # Compute per-response cost.
+        if pricing_cache is not None:
+            pricing = await pricing_cache.get_pricing(r.model_id)
+            cost = compute_response_cost(r, pricing)
+            if cost is not None:
+                entry["cost_usd"] += cost
+                total_cost += cost
+                has_any_cost = True
 
     return {
         "total_tokens": total_tokens,
         "per_model": per_model,
-        "total_cost_usd": None,
+        "total_cost_usd": total_cost if has_any_cost else None,
         "convergence": {},
     }
