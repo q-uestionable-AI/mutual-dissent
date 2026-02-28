@@ -105,7 +105,7 @@ def list_transcripts(limit: int = 20) -> list[dict[str, Any]]:
                     "tokens": _count_tokens_from_dict(data),
                 }
             )
-        except json.JSONDecodeError, KeyError:
+        except (json.JSONDecodeError, KeyError):
             continue
 
     return results
@@ -163,7 +163,7 @@ def _find_transcript_files(transcript_id: str) -> list[Path]:
                 full_id = data.get("transcript_id", "")
                 if full_id.startswith(transcript_id):
                     matches.append(filepath)
-            except json.JSONDecodeError, KeyError:
+            except (json.JSONDecodeError, KeyError):
                 continue
     return matches
 
@@ -182,7 +182,7 @@ def _parse_datetime(value: str | None) -> datetime:
         return datetime.now(UTC)
     try:
         return datetime.fromisoformat(value)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return datetime.now(UTC)
 
 

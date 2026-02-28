@@ -192,7 +192,7 @@ def _extract_content(data: dict[str, Any]) -> str:
     try:
         content: str = data["choices"][0]["message"]["content"]
         return content
-    except KeyError, IndexError, TypeError:
+    except (KeyError, IndexError, TypeError):
         return f"[Failed to parse response: {data}]"
 
 
