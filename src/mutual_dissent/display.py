@@ -181,6 +181,11 @@ def _render_metadata(transcript: DebateTranscript) -> None:
     if total_tokens > 0:
         table.add_row("Tokens", f"{total_tokens:,}")
 
+    # Cost if available.
+    cost_str = _format_cost_summary(transcript)
+    if cost_str:
+        table.add_row("Cost", cost_str)
+
     console.print(table)
     console.print()
 
@@ -266,6 +271,39 @@ def _total_tokens(transcript: DebateTranscript) -> int:
     if transcript.synthesis and transcript.synthesis.token_count is not None:
         total += transcript.synthesis.token_count
     return total
+
+
+def _format_cost_summary(transcript: DebateTranscript) -> str:
+    """Format cost summary from transcript stats metadata.
+
+    Reads ``total_cost_usd`` and per-model ``cost_usd`` from
+    ``transcript.metadata["stats"]``. Returns empty string if cost
+    data is unavailable.
+
+    Args:
+        transcript: Completed debate transcript with stats metadata.
+
+    Returns:
+        Formatted cost string like "$0.0234 (claude: $0.0150, gpt: $0.0084)",
+        or empty string if cost data is not available.
+    """
+    stats = transcript.metadata.get("stats", {})
+    total_cost = stats.get("total_cost_usd")
+    if total_cost is None:
+        return ""
+
+    parts = [f"${total_cost:.4f}"]
+
+    per_model = stats.get("per_model", {})
+    model_costs = []
+    for alias, data in per_model.items():
+        model_cost = data.get("cost_usd", 0.0)
+        if model_cost > 0:
+            model_costs.append(f"{alias}: ${model_cost:.4f}")
+    if model_costs:
+        parts.append(f"({', '.join(model_costs)})")
+
+    return " ".join(parts)
 
 
 def format_markdown(transcript: DebateTranscript, *, verbose: bool = False) -> str:
@@ -438,6 +476,10 @@ def _format_metadata_markdown(transcript: DebateTranscript) -> list[str]:
     total_tokens = _total_tokens(transcript)
     if total_tokens > 0:
         lines.append(f"**Tokens:** {total_tokens:,}")
+
+    cost_str = _format_cost_summary(transcript)
+    if cost_str:
+        lines.append(f"**Cost:** {cost_str}")
 
     date_str = transcript.created_at.strftime("%Y-%m-%d %H:%M UTC")
     lines.append(f"**Date:** {date_str}")

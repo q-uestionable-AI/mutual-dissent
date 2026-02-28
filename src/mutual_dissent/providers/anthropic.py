@@ -172,6 +172,7 @@ class AnthropicProvider(Provider):
         data = resp.json()
         content = _extract_content(data)
         token_count = _extract_token_count(data)
+        input_tokens, output_tokens = _extract_token_split(data)
 
         return ModelResponse(
             model_id=model_id,
@@ -180,6 +181,8 @@ class AnthropicProvider(Provider):
             content=content,
             latency_ms=elapsed_ms,
             token_count=token_count,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
 
@@ -248,6 +251,24 @@ def _extract_token_count(data: dict[str, Any]) -> int | None:
     if usage and "input_tokens" in usage and "output_tokens" in usage:
         return int(usage["input_tokens"]) + int(usage["output_tokens"])
     return None
+
+
+def _extract_token_split(data: dict[str, Any]) -> tuple[int | None, int | None]:
+    """Extract input/output token split from an API response.
+
+    Args:
+        data: Parsed JSON response body.
+
+    Returns:
+        Tuple of (input_tokens, output_tokens). Either or both may be
+        None if the API did not report them.
+    """
+    usage = data.get("usage")
+    if not usage:
+        return None, None
+    inp = int(usage["input_tokens"]) if "input_tokens" in usage else None
+    out = int(usage["output_tokens"]) if "output_tokens" in usage else None
+    return inp, out
 
 
 def _extract_error(resp: httpx.Response) -> str:

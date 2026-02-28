@@ -95,6 +95,13 @@ judge model (currently the synthesizer) for accuracy/completeness scoring.
 Scores stored in `synthesis.analysis["ground_truth_score"]` and
 `transcript.metadata["scores"]`. Implemented in `scoring.py`.
 
+**Pricing** — Session-scoped pricing cache that fetches per-model token
+pricing from the OpenRouter `/api/v1/models` endpoint (public, no auth).
+Computes USD cost per response from input/output token counts. Handles
+vendor-native model IDs by mapping through the config alias system. Graceful
+degradation — if pricing is unavailable, cost is omitted from output rather
+than failing the debate. Implemented in `pricing.py`.
+
 **Transcript Logger** — Writes full structured JSON for every debate. Also
 produces optional Markdown summary for quick review.
 
@@ -332,6 +339,8 @@ class ModelResponse:
     content: str            # Full response text
     timestamp: datetime     # When response was received (UTC)
     token_count: int | None = None      # Tokens used (if available)
+    input_tokens: int | None = None     # Prompt/input tokens
+    output_tokens: int | None = None    # Completion/output tokens
     latency_ms: int | None = None       # Response time in milliseconds
     error: str | None = None            # Error message if call failed
     provider: str | None = None         # Vendor enum value
@@ -364,8 +373,9 @@ class DebateTranscript:
     #   resolved_config: dict       — full effective config snapshot
     #   providers_used: list[str]
     #   stats: dict                 — precomputed on write:
-    #     total_tokens, per_model token counts,
-    #     total_cost_usd (if derivable),
+    #     total_tokens, per_model token counts (incl. input/output split),
+    #     total_cost_usd (computed from OpenRouter pricing API),
+    #     per_model cost_usd,
     #     rounds_to_convergence, disagreement_count (placeholders)
 ```
 
@@ -396,6 +406,8 @@ class DebateTranscript:
           "content": "...",
           "timestamp": "2026-02-21T15:30:01Z",
           "token_count": 450,
+          "input_tokens": 300,
+          "output_tokens": 150,
           "latency_ms": 2100,
           "error": null,
           "provider": "anthropic",
@@ -416,10 +428,12 @@ class DebateTranscript:
     "resolved_config": { "..." },
     "stats": {
       "total_tokens": 4200,
-      "per_model": { "claude": 1800, "gpt": 2400 },
-      "total_cost_usd": null,
-      "rounds_to_convergence": null,
-      "disagreement_count": null
+      "per_model": {
+        "claude": { "tokens": 1800, "input_tokens": 1200, "output_tokens": 600, "calls": 2, "cost_usd": 0.0126 },
+        "gpt": { "tokens": 2400, "input_tokens": 1600, "output_tokens": 800, "calls": 2, "cost_usd": 0.016 }
+      },
+      "total_cost_usd": 0.0286,
+      "convergence": {}
     }
   }
 }

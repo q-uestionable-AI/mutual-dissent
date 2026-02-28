@@ -166,6 +166,7 @@ class OpenRouterProvider(Provider):
         data = resp.json()
         content = _extract_content(data)
         token_count = _extract_token_count(data)
+        input_tokens, output_tokens = _extract_token_split(data)
 
         return ModelResponse(
             model_id=model_id,
@@ -174,6 +175,8 @@ class OpenRouterProvider(Provider):
             content=content,
             latency_ms=elapsed_ms,
             token_count=token_count,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
 
@@ -206,6 +209,24 @@ def _extract_token_count(data: dict[str, Any]) -> int | None:
     if usage and "total_tokens" in usage:
         return int(usage["total_tokens"])
     return None
+
+
+def _extract_token_split(data: dict[str, Any]) -> tuple[int | None, int | None]:
+    """Extract input/output token split from an API response.
+
+    Args:
+        data: Parsed JSON response body.
+
+    Returns:
+        Tuple of (prompt_tokens, completion_tokens). Either or both may be
+        None if the API did not report them.
+    """
+    usage = data.get("usage")
+    if not usage:
+        return None, None
+    prompt = int(usage["prompt_tokens"]) if "prompt_tokens" in usage else None
+    completion = int(usage["completion_tokens"]) if "completion_tokens" in usage else None
+    return prompt, completion
 
 
 def _extract_error(resp: httpx.Response) -> str:

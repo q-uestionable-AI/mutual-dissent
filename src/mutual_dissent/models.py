@@ -35,6 +35,8 @@ class ModelResponse:
         content: Full response text.
         timestamp: When the response was received (UTC).
         token_count: Total tokens used, if reported by API.
+        input_tokens: Prompt/input tokens, if reported by API.
+        output_tokens: Completion/output tokens, if reported by API.
         latency_ms: Response time in milliseconds.
         error: Error message if the call failed, None on success.
         role: Debate role — "initial", "reflection", or "synthesis".
@@ -51,6 +53,8 @@ class ModelResponse:
     content: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     token_count: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
     latency_ms: int | None = None
     error: str | None = None
     role: str = ""
@@ -70,6 +74,8 @@ class ModelResponse:
             "content": self.content,
             "timestamp": self.timestamp.isoformat(),
             "token_count": self.token_count,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
             "latency_ms": self.latency_ms,
             "error": self.error,
             "role": self.role,
