@@ -1,15 +1,20 @@
-"""Tests for run_replay() orchestrator function.
+"""Tests for run_replay() orchestrator function and replay CLI command.
 
 Covers: re-synthesize-only mode, additional-rounds mode, synthesizer
-override, metadata linking, and round numbering continuity.
+override, metadata linking, round numbering continuity, and CLI behavior.
 """
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from click.testing import CliRunner
 
+from mutual_dissent.cli import main
 from mutual_dissent.config import Config
 from mutual_dissent.models import DebateRound, DebateTranscript, ModelResponse
 from mutual_dissent.orchestrator import run_replay
@@ -351,3 +356,184 @@ class TestRunReplayValidation:
         source = _make_source_transcript()
         with pytest.raises(ValueError, match="additional_rounds must be >= 0"):
             await run_replay(source, _config(), additional_rounds=-1)
+
+
+# ---------------------------------------------------------------------------
+# Helpers -- transcript JSON fixtures for CLI tests
+# ---------------------------------------------------------------------------
+
+
+def _make_transcript_json(
+    *,
+    transcript_id: str = "abcd1234-5678-9abc-def0-123456789abc",
+    query: str = "What is the meaning of life?",
+    panel: list[str] | None = None,
+    synthesizer_id: str = "claude",
+    max_rounds: int = 1,
+) -> dict[str, Any]:
+    """Build a complete transcript JSON dict for CLI test fixtures.
+
+    Args:
+        transcript_id: Full UUID for the transcript.
+        query: The debate query.
+        panel: List of panel model aliases.
+        synthesizer_id: Synthesizer model alias.
+        max_rounds: Number of configured reflection rounds.
+
+    Returns:
+        Dict matching the DebateTranscript.to_dict() format.
+    """
+    if panel is None:
+        panel = ["claude", "gpt"]
+
+    return {
+        "transcript_id": transcript_id,
+        "query": query,
+        "panel": panel,
+        "synthesizer_id": synthesizer_id,
+        "max_rounds": max_rounds,
+        "rounds": [
+            {
+                "round_number": 0,
+                "round_type": "initial",
+                "responses": [
+                    {
+                        "model_id": f"provider/{alias}",
+                        "model_alias": alias,
+                        "round_number": 0,
+                        "content": f"Initial response from {alias}.",
+                        "timestamp": "2026-02-28T12:00:00+00:00",
+                        "token_count": 100,
+                        "latency_ms": 500,
+                        "error": None,
+                        "role": "initial",
+                        "routing": None,
+                        "analysis": {},
+                    }
+                    for alias in panel
+                ],
+            }
+        ],
+        "synthesis": {
+            "model_id": f"provider/{synthesizer_id}",
+            "model_alias": synthesizer_id,
+            "round_number": -1,
+            "content": "Synthesized answer.",
+            "timestamp": "2026-02-28T12:01:00+00:00",
+            "token_count": 200,
+            "latency_ms": 800,
+            "error": None,
+            "role": "synthesis",
+            "routing": None,
+            "analysis": {},
+        },
+        "created_at": "2026-02-28T12:00:00+00:00",
+        "metadata": {},
+    }
+
+
+# ---------------------------------------------------------------------------
+# TestReplayCommand -- CLI
+# ---------------------------------------------------------------------------
+
+
+class TestReplayCommand:
+    """``replay`` CLI command registration and behavior."""
+
+    def test_replay_registered(self) -> None:
+        """Main help output includes the replay command."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["--help"])
+        assert result.exit_code == 0
+        assert "replay" in result.output
+
+    def test_replay_shows_help(self) -> None:
+        """replay --help shows expected options."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["replay", "--help"])
+        assert result.exit_code == 0
+        assert "--synthesizer" in result.output
+        assert "--rounds" in result.output
+        assert "--verbose" in result.output
+        assert "--no-save" in result.output
+        assert "--output" in result.output
+        assert "TRANSCRIPT_ID" in result.output
+
+    def test_replay_not_found(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """replay exits 1 when no transcript matches the given ID."""
+        monkeypatch.setattr("mutual_dissent.transcript.TRANSCRIPT_DIR", tmp_path)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["replay", "nonexist"])
+        assert result.exit_code == 1
+        assert "no transcript" in result.output.lower() or "not found" in result.output.lower()
+
+    def test_replay_id_too_short(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """replay exits 1 when ID is fewer than 4 characters."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["replay", "abc"])
+        assert result.exit_code == 1
+        assert "at least 4" in result.output.lower()
+
+    def test_replay_no_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """replay exits 1 when no API key is configured."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.delenv("XAI_API_KEY", raising=False)
+        monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        monkeypatch.setattr("mutual_dissent.config.CONFIG_PATH", Path("/nonexistent"))
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["replay", "abcd1234"])
+        assert result.exit_code == 1
+        assert "api key" in result.output.lower()
+
+    def test_replay_json_output(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """replay --output json --no-save emits valid JSON with fresh transcript ID."""
+        monkeypatch.setattr("mutual_dissent.transcript.TRANSCRIPT_DIR", tmp_path)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
+
+        # Write a source transcript.
+        tid = "replayjs-5678-9abc-def0-123456789abc"
+        data = _make_transcript_json(transcript_id=tid)
+        filepath = tmp_path / f"2026-02-28_{tid[:8]}.json"
+        filepath.write_text(json.dumps(data), encoding="utf-8")
+
+        # Patch run_replay to avoid real API calls.
+        async def fake_replay(
+            source: DebateTranscript,
+            config: Any,
+            *,
+            synthesizer: str | None = None,
+            additional_rounds: int = 0,
+        ) -> DebateTranscript:
+            return DebateTranscript(
+                query=source.query,
+                panel=list(source.panel),
+                synthesizer_id=synthesizer or source.synthesizer_id,
+                max_rounds=source.max_rounds + additional_rounds,
+                rounds=list(source.rounds),
+                synthesis=ModelResponse(
+                    model_id="provider/claude",
+                    model_alias="claude",
+                    round_number=-1,
+                    content="Replayed synthesis.",
+                    role="synthesis",
+                ),
+                metadata={"source_transcript_id": source.transcript_id},
+            )
+
+        monkeypatch.setattr("mutual_dissent.cli.run_replay", fake_replay)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["replay", "replayjs", "--output", "json", "--no-save"])
+        assert result.exit_code == 0
+
+        output_data = json.loads(result.output)
+        assert output_data["transcript_id"] != tid
+        assert output_data["metadata"]["source_transcript_id"] == tid
