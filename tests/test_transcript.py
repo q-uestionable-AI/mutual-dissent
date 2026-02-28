@@ -1,7 +1,9 @@
-"""Tests for transcript deserialization.
+"""Tests for transcript deserialization and listing.
 
 Covers: _parse_transcript_file() full deserialization of rounds, responses,
 synthesis, timestamps, and backward compatibility with old transcripts.
+Also covers: list_transcripts() metadata extraction including panel,
+synthesizer, and token count fields.
 """
 
 from __future__ import annotations
@@ -11,8 +13,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from mutual_dissent.models import DebateRound, DebateTranscript, ModelResponse
-from mutual_dissent.transcript import _parse_transcript_file
+from mutual_dissent.transcript import _parse_transcript_file, list_transcripts
 
 
 def _write_transcript(tmp_path: Path, data: dict[str, Any]) -> Path:
@@ -328,3 +332,119 @@ class TestParseTranscriptFile:
         assert restored.synthesis.content == "Round trip synthesis"
         assert restored.synthesis.model_alias == "gpt"
         assert isinstance(restored.created_at, datetime)
+
+
+class TestListTranscripts:
+    """Listing transcripts with panel, synthesizer, and token metadata."""
+
+    @pytest.fixture()
+    def _redirect_transcript_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        """Point TRANSCRIPT_DIR at a temporary directory.
+
+        Args:
+            tmp_path: Pytest temporary directory.
+            monkeypatch: Pytest monkeypatch fixture.
+
+        Returns:
+            The temporary directory used as TRANSCRIPT_DIR.
+        """
+        monkeypatch.setattr("mutual_dissent.transcript.TRANSCRIPT_DIR", tmp_path)
+        return tmp_path
+
+    def _write_minimal_transcript(
+        self,
+        directory: Path,
+        filename: str,
+        *,
+        panel: list[str] | None = None,
+        synthesizer_id: str = "gpt",
+        rounds: list[dict[str, Any]] | None = None,
+        synthesis: dict[str, Any] | None = None,
+    ) -> Path:
+        """Write a minimal transcript JSON file for list_transcripts() tests.
+
+        Args:
+            directory: Directory to write the file to.
+            filename: File name (must end with .json).
+            panel: Panel model aliases.
+            synthesizer_id: Synthesizer alias.
+            rounds: Round data dicts.
+            synthesis: Synthesis response dict.
+
+        Returns:
+            Path to the written file.
+        """
+        data: dict[str, Any] = {
+            "transcript_id": "aaaa1111-2222-3333-4444-555566667777",
+            "query": "Test question",
+            "panel": panel if panel is not None else ["claude", "gpt"],
+            "synthesizer_id": synthesizer_id,
+            "max_rounds": 1,
+            "rounds": rounds if rounds is not None else [],
+            "synthesis": synthesis,
+            "created_at": "2026-02-28T12:00:00+00:00",
+            "metadata": {},
+        }
+        filepath = directory / filename
+        filepath.write_text(json.dumps(data), encoding="utf-8")
+        return filepath
+
+    def test_returns_panel_field(self, tmp_path: Path, _redirect_transcript_dir: Path) -> None:
+        """Panel field is a comma-separated string of model aliases."""
+        self._write_minimal_transcript(tmp_path, "2026-02-28_aaaa1111.json")
+
+        results = list_transcripts()
+
+        assert len(results) == 1
+        assert results[0]["panel"] == "claude, gpt"
+
+    def test_returns_synthesizer_field(
+        self, tmp_path: Path, _redirect_transcript_dir: Path
+    ) -> None:
+        """Synthesizer field matches the synthesizer_id from transcript."""
+        self._write_minimal_transcript(tmp_path, "2026-02-28_aaaa1111.json", synthesizer_id="gpt")
+
+        results = list_transcripts()
+
+        assert len(results) == 1
+        assert results[0]["synthesizer"] == "gpt"
+
+    def test_returns_tokens_field(self, tmp_path: Path, _redirect_transcript_dir: Path) -> None:
+        """Tokens field sums token_count across all rounds and synthesis."""
+        rounds = [
+            {
+                "round_number": 0,
+                "round_type": "initial",
+                "responses": [
+                    _make_response_dict(token_count=100),
+                    _make_response_dict(token_count=200),
+                ],
+            },
+        ]
+        synthesis = _make_response_dict(token_count=50, round_number=-1, role="synthesis")
+        self._write_minimal_transcript(
+            tmp_path,
+            "2026-02-28_aaaa1111.json",
+            rounds=rounds,
+            synthesis=synthesis,
+        )
+
+        results = list_transcripts()
+
+        assert len(results) == 1
+        assert results[0]["tokens"] == 350
+
+    def test_limit_respected(self, tmp_path: Path, _redirect_transcript_dir: Path) -> None:
+        """Limit parameter caps the number of returned transcripts."""
+        for i in range(5):
+            self._write_minimal_transcript(tmp_path, f"2026-02-2{i}_aaaa111{i}.json")
+
+        results = list_transcripts(limit=3)
+
+        assert len(results) == 3
+
+    def test_empty_directory(self, tmp_path: Path, _redirect_transcript_dir: Path) -> None:
+        """Empty transcript directory returns an empty list."""
+        results = list_transcripts()
+
+        assert results == []

@@ -74,23 +74,25 @@ def load_transcript(transcript_id: str) -> DebateTranscript | None:
     return _parse_transcript_file(matches[0])
 
 
-def list_transcripts(limit: int = 20) -> list[dict[str, str]]:
+def list_transcripts(limit: int = 20) -> list[dict[str, Any]]:
     """List saved transcripts, most recent first.
 
     Args:
         limit: Maximum number of transcripts to return.
 
     Returns:
-        List of dicts with 'id', 'short_id', 'date', 'query', and 'file' keys.
+        List of dicts with 'id', 'short_id', 'date', 'query', 'file',
+        'panel', 'synthesizer', and 'tokens' keys.
     """
     ensure_dirs()
     files = sorted(TRANSCRIPT_DIR.glob("*.json"), reverse=True)
 
-    results = []
+    results: list[dict[str, Any]] = []
     for filepath in files[:limit]:
         try:
             with open(filepath, encoding="utf-8") as f:
                 data = json.load(f)
+            panel_list: list[str] = data.get("panel", [])
             results.append(
                 {
                     "id": data.get("transcript_id", ""),
@@ -98,12 +100,45 @@ def list_transcripts(limit: int = 20) -> list[dict[str, str]]:
                     "date": data.get("created_at", "")[:10],
                     "query": _truncate(data.get("query", ""), 80),
                     "file": filepath.name,
+                    "panel": ", ".join(panel_list),
+                    "synthesizer": data.get("synthesizer_id", ""),
+                    "tokens": _count_tokens_from_dict(data),
                 }
             )
         except json.JSONDecodeError, KeyError:
             continue
 
     return results
+
+
+def _count_tokens_from_dict(data: dict[str, Any]) -> int:
+    """Sum all token_count values from a transcript data dict.
+
+    Iterates through all rounds and their responses, plus the synthesis
+    response if present, to compute a total token count.
+
+    Args:
+        data: Parsed transcript JSON dict with 'rounds' and optional
+            'synthesis' keys.
+
+    Returns:
+        Total token count across all responses. Returns 0 if no token
+        data is found.
+    """
+    total = 0
+    for round_data in data.get("rounds", []):
+        for response in round_data.get("responses", []):
+            token_count = response.get("token_count")
+            if token_count is not None:
+                total += token_count
+
+    synthesis = data.get("synthesis")
+    if synthesis is not None:
+        token_count = synthesis.get("token_count")
+        if token_count is not None:
+            total += token_count
+
+    return total
 
 
 def _find_transcript_files(transcript_id: str) -> list[Path]:
