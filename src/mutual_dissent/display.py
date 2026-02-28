@@ -538,6 +538,131 @@ def render_transcript_list(transcripts: list[dict[str, Any]]) -> None:
     console.print()
 
 
+def _mask_key(key: str) -> str:
+    """Mask an API key, showing first 6 and last 4 characters.
+
+    Args:
+        key: The full API key string.
+
+    Returns:
+        Masked key like "sk-or-...7890", or "not configured" if empty.
+    """
+    if not key:
+        return "not configured"
+    if len(key) <= 10:
+        return key[:2] + "..." + key[-2:]
+    return key[:6] + "..." + key[-4:]
+
+
+def _provider_source(provider: str, config_providers: dict[str, str]) -> str:
+    """Determine whether a provider key came from env, file, or is absent.
+
+    Args:
+        provider: Provider name (e.g. "openrouter").
+        config_providers: The config.providers dict.
+
+    Returns:
+        "env", "file", or "none".
+    """
+    import os
+
+    from mutual_dissent.config import _PROVIDER_ENV_MAP
+
+    env_var = _PROVIDER_ENV_MAP.get(provider)
+    has_env = bool(env_var and os.environ.get(env_var))
+    has_file = bool(config_providers.get(provider))
+
+    if has_env:
+        return "env"
+    if has_file:
+        return "file"
+    return "none"
+
+
+def render_config_show(
+    config: Any,
+    *,
+    context_lengths: dict[str, int] | None = None,
+) -> None:
+    """Render effective configuration as a Rich table.
+
+    Displays provider keys (masked), routing config, defaults,
+    and model aliases. Never prints full API keys.
+
+    Args:
+        config: Config instance with all resolved settings.
+        context_lengths: Optional alias -> context length mapping
+            from --check-models API fetch.
+    """
+    from mutual_dissent.config import _ENV_VAR_MAP, CONFIG_PATH
+
+    console.print()
+
+    # --- Config file path ---
+    path_status = "exists" if CONFIG_PATH.exists() else "not found"
+    console.print(f"[bold]Config file:[/bold] {CONFIG_PATH} [dim]({path_status})[/dim]")
+    console.print()
+
+    # --- Provider keys ---
+    console.print("[bold]Provider Keys[/bold]")
+    key_table = Table(show_header=True, padding=(0, 1))
+    key_table.add_column("Provider", style="bold")
+    key_table.add_column("Key")
+    key_table.add_column("Source", style="dim")
+
+    all_providers = list(dict.fromkeys(list(_ENV_VAR_MAP.values()) + list(config.providers.keys())))
+    for provider in all_providers:
+        key_val = config.providers.get(provider, "")
+        masked = _mask_key(key_val)
+        source = _provider_source(provider, config.providers)
+        key_table.add_row(provider, masked, source)
+
+    console.print(key_table)
+    console.print()
+
+    # --- Routing ---
+    console.print("[bold]Routing[/bold]")
+    route_table = Table(show_header=False, box=None, padding=(0, 2))
+    route_table.add_column("key", style="dim")
+    route_table.add_column("value")
+    for rkey, rval in config.routing.items():
+        route_table.add_row(rkey, rval)
+    console.print(route_table)
+    console.print()
+
+    # --- Defaults ---
+    console.print("[bold]Defaults[/bold]")
+    defaults_table = Table(show_header=False, box=None, padding=(0, 2))
+    defaults_table.add_column("key", style="dim")
+    defaults_table.add_column("value")
+    defaults_table.add_row("panel", ", ".join(config.default_panel))
+    defaults_table.add_row("synthesizer", config.default_synthesizer)
+    defaults_table.add_row("rounds", str(config.default_rounds))
+    console.print(defaults_table)
+    console.print()
+
+    # --- Model aliases ---
+    console.print("[bold]Model Aliases[/bold]")
+    alias_table = Table(show_header=True, padding=(0, 1))
+    alias_table.add_column("Alias", style="bold")
+    alias_table.add_column("OpenRouter ID", style="dim")
+    alias_table.add_column("Direct ID", style="dim")
+    if context_lengths:
+        alias_table.add_column("Context", justify="right")
+
+    for alias, ids in config._model_aliases_v2.items():
+        or_id = ids.get("openrouter", "\u2014")
+        direct_id = ids.get("direct", "\u2014")
+        row = [alias, or_id, direct_id]
+        if context_lengths:
+            ctx = context_lengths.get(alias)
+            row.append(f"{ctx:,}" if ctx else "\u2014")
+        alias_table.add_row(*row)
+
+    console.print(alias_table)
+    console.print()
+
+
 def render_config_test(
     results: list[dict[str, RoutingDecision | ModelResponse | str]],
 ) -> None:
