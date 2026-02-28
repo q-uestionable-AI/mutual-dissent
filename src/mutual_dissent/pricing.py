@@ -167,7 +167,7 @@ def _parse_pricing_response(data: dict[str, Any]) -> dict[str, ModelPricing]:
                 prompt_price=float(prompt_str),
                 completion_price=float(completion_str),
             )
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             continue
     return result
 
