@@ -234,7 +234,7 @@ def _extract_content(data: dict[str, Any]) -> str:
         if texts:
             return "".join(texts)
         return "[No text content in response]"
-    except KeyError, TypeError:
+    except (KeyError, TypeError):
         return f"[Failed to parse response: {data}]"
 
 
