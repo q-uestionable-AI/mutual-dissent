@@ -1,13 +1,13 @@
 # Mutual Dissent
 
-[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Docs](https://img.shields.io/badge/docs-mutual--dissent.dev-8b5cf6)](https://docs.mutual-dissent.dev)
 
 Cross-vendor multi-model debate and consensus engine for AI response distillation.
 
-**Phase 2 complete** — full CLI research tool with direct vendor APIs, replay, ground-truth scoring, cost tracking, and markdown export. 325+ tests across Windows and Linux CI.
+**Phase 3 complete** — NiceGUI web interface with live debate view, research dashboard, and full CLI research tool. Direct vendor APIs, replay, ground-truth scoring, cost tracking, and markdown export. 400+ tests across Windows and Linux CI.
 
 Sends a user query to multiple AI models simultaneously, shares competing responses back to each model for reflection and critique, then synthesizes a final answer through a user-selected model.
 
@@ -53,6 +53,9 @@ dissent replay <transcript-id> --synthesizer grok
 # Export to markdown
 dissent show <transcript-id> --file output.md
 
+# Launch the web UI
+dissent serve
+
 # View config and provider status
 dissent config show
 dissent config test
@@ -67,8 +70,8 @@ dissent config test
 | **Phase 1: Foundation** | ✅ Complete — core debate loop, OpenRouter integration |
 | **Phase 1.5: Provider Abstraction** | ✅ Complete — direct Anthropic API, mixed-panel routing |
 | **Phase 2: CLI Expansion** | ✅ Complete — replay, scoring, cost tracking, markdown export |
-| **Phase 3: Web GUI** | 🔜 Next — NiceGUI debate view + research dashboard |
-| **Phase 4: Documentation** | Planned — Mintlify docs site with AI assistant |
+| **Phase 3: Web GUI** | ✅ Complete — NiceGUI debate view, research dashboard, live streaming |
+| **Phase 4: Documentation** | ✅ Complete — Mintlify docs site with AI assistant and MCP server |
 | **Phase 5: Maturity** | Planned — Tauri desktop app, batch mode, public release |
 
 See [Roadmap](docs/Roadmap.md) for the full plan.
@@ -84,6 +87,7 @@ Full debate transcripts are logged as structured JSON, enabling analysis of:
 
 ## Documentation
 
+- [docs.mutual-dissent.dev](https://docs.mutual-dissent.dev) — Full documentation with AI assistant
 - [Architecture](docs/Architecture.md) — Components, data models, extension points
 - [Roadmap](docs/Roadmap.md) — Phased development plan
 - [Environment](docs/Environment.md) — API keys and environment variables
