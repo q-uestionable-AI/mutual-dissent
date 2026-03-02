@@ -1,0 +1,27 @@
+# Mutual Dissent
+
+> Cross-vendor multi-model AI debate engine
+
+## Docs
+
+- [Introduction](/introduction)
+- [Quickstart](/quickstart)
+- [Core Concepts](/concepts)
+- [CLI: ask](/cli/ask)
+- [CLI: replay](/cli/replay)
+- [CLI: list & show](/cli/list-show)
+- [CLI: config](/cli/config)
+- [CLI: serve](/cli/serve)
+- [TOML Reference](/config/toml-reference)
+- [Providers](/config/providers)
+- [Routing](/config/routing)
+- [Environment Variables](/config/environment-variables)
+- [Transcript Schema](/schemas/transcript)
+- [Model Types](/schemas/models)
+- [Metadata](/schemas/metadata)
+- [Architecture Overview](/architecture/overview)
+- [Orchestrator](/architecture/orchestrator)
+- [Provider Layer](/architecture/providers)
+- [Web UI](/architecture/web-ui)
+- [Research Methodology](/research/methodology)
+- [Findings](/research/findings)

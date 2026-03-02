@@ -4,15 +4,86 @@
   "name": "Mutual Dissent",
   "colors": {
     "primary": "#06b6d4",
-    "light": "#06b6d4",
+    "light": "#0e7490",
     "dark": "#06b6d4"
+  },
+  "favicon": "/favicon.svg",
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/q-uestionable-ai/mutual-dissent"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "/quickstart"
   },
   "navigation": {
     "groups": [
       {
-        "group": "Get Started",
-        "pages": ["introduction"]
+        "group": "Getting Started",
+        "pages": [
+          "introduction",
+          "quickstart",
+          "concepts"
+        ]
+      },
+      {
+        "group": "CLI Reference",
+        "pages": [
+          "cli/ask",
+          "cli/replay",
+          "cli/list-show",
+          "cli/config",
+          "cli/serve"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "config/toml-reference",
+          "config/providers",
+          "config/routing",
+          "config/environment-variables"
+        ]
+      },
+      {
+        "group": "Data & Schemas",
+        "pages": [
+          "schemas/transcript",
+          "schemas/models",
+          "schemas/metadata"
+        ]
+      },
+      {
+        "group": "Architecture",
+        "pages": [
+          "architecture/overview",
+          "architecture/orchestrator",
+          "architecture/providers",
+          "architecture/web-ui"
+        ]
+      },
+      {
+        "group": "Research",
+        "pages": [
+          "research/methodology",
+          "research/findings"
+        ]
       }
     ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/q-uestionable-ai/mutual-dissent",
+      "website": "https://richardspicer.io"
+    }
+  },
+  "metadata": {
+    "og:site_name": "Mutual Dissent Docs",
+    "og:description": "Cross-vendor multi-model AI debate engine"
+  },
+  "search": {
+    "placeholder": "Search docs..."
   }
 }
