@@ -2,15 +2,15 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Mutual Dissent, please report it responsibly:
+If you discover a security vulnerability in Mutual Dissent, please report it responsibly.
+
+**Preferred:** Use [GitHub Private Vulnerability Reporting](https://github.com/q-uestionable-AI/mutual-dissent/security/advisories/new) — click "Report a vulnerability" in the Security tab. This keeps coordination on-platform and follows the [OpenSSF Vulnerability Disclosure Guide](https://github.com/ossf/oss-vulnerability-guide).
+
+**Alternative:** Email **security@q-uestionable.ai** with a description of the vulnerability, steps to reproduce, and potential impact assessment.
 
 1. **Do not** open a public GitHub issue for security vulnerabilities
-2. Email **security@q-uestionable.ai** with:
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact assessment
-3. Allow up to 72 hours for initial response
-4. We will coordinate disclosure timeline with you
+2. Allow up to 72 hours for initial response
+3. We will coordinate disclosure timeline with you
 
 ## Scope
 
