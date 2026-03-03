@@ -206,10 +206,10 @@ Each provider normalizes vendor-specific response formats into `ModelResponse`. 
 
 ### Provider Capabilities
 
-Minimal for Phase 1.5 — only `max_context_tokens`, pulled dynamically from
+Minimal currently — only `max_context_tokens`, pulled dynamically from
 OpenRouter's `/api/v1/models` endpoint. No hardcoded pricing or capability
 matrices. Extended capabilities (`supports_tools`, `supports_vision`,
-`supports_json_mode`, detailed pricing) deferred to Phase 4.
+`supports_json_mode`, detailed pricing) deferred to a future release.
 
 ### Provider Router
 
