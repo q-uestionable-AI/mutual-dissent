@@ -7,7 +7,7 @@
 
 Cross-vendor multi-model debate and consensus engine for AI response distillation.
 
-**Phase 3 complete** — NiceGUI web interface with live debate view, research dashboard, and full CLI research tool. Direct vendor APIs, replay, ground-truth scoring, cost tracking, and markdown export. 400+ tests across Windows and Linux CI.
+NiceGUI web interface with live debate view, research dashboard, and full CLI research tool. Direct vendor APIs, replay, ground-truth scoring, cost tracking, and markdown export. 400+ tests across Windows and Linux CI.
 
 Sends a user query to multiple AI models simultaneously, shares competing responses back to each model for reflection and critique, then synthesizes a final answer through a user-selected model.
 
@@ -33,31 +33,10 @@ uv sync
 ## Usage
 
 ```bash
-# Run a debate
-dissent ask "Your query here"
 dissent ask "Your query here" --synthesizer claude --rounds 2 --panel claude,gpt,gemini
-
-# Attach file context
 dissent ask "Summarize this" --file report.pdf
-
-# Score against a known answer
-dissent ask "What is the speed of light?" --ground-truth "299,792,458 m/s"
-
-# Manage transcripts
-dissent list
-dissent show <transcript-id>
-
-# Replay with a different synthesizer
 dissent replay <transcript-id> --synthesizer grok
-
-# Export to markdown
-dissent show <transcript-id> --file output.md
-
-# Launch the web UI
 dissent serve
-
-# View config and provider status
-dissent config show
 dissent config test
 ```
 
@@ -65,33 +44,18 @@ dissent config test
 
 ## Status
 
-| Phase | Status |
-|-------|--------|
-| **Phase 1: Foundation** | ✅ Complete — core debate loop, OpenRouter integration |
-| **Phase 1.5: Provider Abstraction** | ✅ Complete — direct Anthropic API, mixed-panel routing |
-| **Phase 2: CLI Expansion** | ✅ Complete — replay, scoring, cost tracking, markdown export |
-| **Phase 3: Web GUI** | ✅ Complete — NiceGUI debate view, research dashboard, live streaming |
-| **Phase 4: Documentation** | ✅ Complete — Mintlify docs site with AI assistant and MCP server |
-| **Phase 5: Maturity** | Planned — Tauri desktop app, batch mode, public release |
-
-See [Roadmap](docs/Roadmap.md) for the full plan.
+| Capability | Status |
+|------------|--------|
+| Core debate loop | ✅ Complete — fan-out, reflection, synthesis via OpenRouter |
+| Provider abstraction | ✅ Complete — direct Anthropic API, mixed-panel routing |
+| CLI research tools | ✅ Complete — replay, scoring, cost tracking, markdown export |
+| Web GUI | ✅ Complete — NiceGUI debate view, research dashboard, live streaming |
+| Documentation | ✅ Complete — Mintlify docs site with AI assistant and MCP server |
+| Desktop app & batch mode | Planned — Tauri wrapper, alternative topologies, public release |
 
 ## Research Platform
 
-Full debate transcripts are logged as structured JSON, enabling analysis of:
-
-- **Disagreement patterns** — where do models consistently diverge?
-- **Convergence dynamics** — how many rounds until consensus? Which models cave first?
-- **Consensus poisoning** — can a deliberately wrong claim propagate through reflection?
-- **Unanimous hallucinations** — when all models confidently agree on the wrong answer
-
-## Documentation
-
-- [docs.mutual-dissent.dev](https://docs.mutual-dissent.dev) — Full documentation with AI assistant
-- [Architecture](docs/Architecture.md) — Components, data models, extension points
-- [Roadmap](docs/Roadmap.md) — Phased development plan
-- [Environment](docs/Environment.md) — API keys and environment variables
-- [Contributing](CONTRIBUTING.md) — Development setup and workflow
+Full debate transcripts are logged as structured JSON for research — disagreement patterns, convergence dynamics, consensus poisoning, and hallucination detection. See [Research Methodology](https://docs.mutual-dissent.dev) for details.
 
 ## License
 

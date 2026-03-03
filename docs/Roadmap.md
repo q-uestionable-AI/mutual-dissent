@@ -10,85 +10,15 @@ Mutual Dissent automates the workflow that power users already do manually — a
 
 ---
 
-## Phased Delivery
+## Development History & Status
 
-### Phase 1: Foundation ✅ COMPLETE
+### Core Debate Loop ✅
 
-**Goal:** Working CLI that executes the core debate loop — fan-out, reflection, synthesis — and saves transcripts.
+Working CLI that executes the fan-out → reflection → synthesis loop and saves transcripts. OpenRouter integration with async parallel model calls, configurable reflection rounds, Rich terminal output, and JSON transcript logging to `~/.mutual-dissent/transcripts/`. Completed 2026-02-21 — first live 4-vendor debate: 41,476 tokens.
 
-**Deliverables:**
-- OpenRouter integration with async parallel model calls
-- Core debate orchestrator: initial round → reflection round → synthesis
-- Model alias system (claude, gpt, gemini, grok → OpenRouter model IDs)
-- CLI with `ask` command and core flags (--panel, --synthesizer, --rounds)
-- JSON transcript logging to `~/.mutual-dissent/transcripts/`
-- Terminal output formatting (Rich panels, color-coded models)
-- Configurable reflection and synthesis prompt templates
-- Config file for API key and default settings
+### Provider Abstraction ✅
 
-**Completed:** 2026-02-21. First live 4-vendor debate: 41,476 tokens, full reflection loop.
-
----
-
-### Phase 1.5: Provider Abstraction (Direct API)
-
-**Goal:** Replace the single-provider OpenRouter client with a provider
-abstraction layer that supports direct vendor API keys alongside OpenRouter,
-starting with Anthropic.
-
-**Why now:** This is an architectural change to the client layer. Every feature
-built after this (replay, cost tracking, GUI) depends on the provider interface.
-Refactoring later means rewriting integrations.
-
-**Build order:** Config schema first (drives router interface) → core types →
-Provider ABC → OpenRouterProvider refactor → AnthropicProvider → ProviderRouter →
-schema upgrades → routing smoke test.
-
-**Deliverables:**
-
-*Core types:*
-- `Vendor` enum (`ANTHROPIC`, `OPENAI`, `GOOGLE`, `XAI`, `GROQ`, `OPENROUTER`, `OLLAMA`)
-- `RoutedRequest` dataclass (`vendor`, `model_id`, `model_alias`, `round_number`, `messages`)
-- `RoutingDecision` dataclass (`vendor`, `mode`, `via_openrouter`)
-
-*Provider abstraction:*
-- `Provider` ABC with `complete()` accepting `messages` or `prompt` (exactly one), plus `complete_parallel()`
-- `OpenRouterProvider` — refactored from existing `client.py`
-- `AnthropicProvider` — direct Anthropic Messages API client
-- `ProviderRouter` — resolves alias → routing decision → dispatches to correct provider. Groups `RoutedRequest` by provider for `complete_parallel`.
-
-*Config:*
-- Config schema with `[providers]`, `[routing]`, `[model_aliases]` sections
-- Per-alias dual model IDs: `claude.openrouter` and `claude.direct`
-- Env var support: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.
-- Backward compatibility: existing `api_key` field still works for OpenRouter
-
-*Schema upgrades (concurrent with provider work):*
-- `ModelResponse.role` — `"initial"` | `"reflection"` | `"synthesis"`
-- `ModelResponse.routing` — serialized `RoutingDecision`
-- `ModelResponse.analysis` — empty dict, reserved for future scoring
-- `DebateTranscript.metadata.resolved_config` — full effective config (not hash)
-- `DebateTranscript.metadata.stats` — `total_tokens`, `per_model`, `total_cost_usd`, placeholder convergence fields
-- All timestamps UTC as `YYYY-MM-DDTHH:MM:SSZ`
-
-*Routing smoke test:*
-- `dissent config test` — for each alias: resolve routing → send minimal prompt → report provider, latency, errors
-
-*Minimal ProviderCapabilities:*
-- `max_context_tokens` only, pulled dynamically from OpenRouter `/api/v1/models`
-- No hardcoded pricing — model prices change weekly
-
-**Future provider stubs (not in this phase):**
-- OpenAI, Google, xAI, Groq — same `Provider` interface, implemented when needed
-
-**Exit criteria:**
-- `dissent config test` passes for claude (direct) and gpt (OpenRouter)
-- Mixed-panel debate works end-to-end (at least one model direct, one via OpenRouter)
-- `provider` and `routing` info present in all transcript `ModelResponse` entries
-- `metadata.stats` precomputed and present in transcripts
-- `metadata.resolved_config` present in transcripts
-
-**Design decisions (multi-model review consensus):**
+Replaced the single-provider OpenRouter client with a provider abstraction layer supporting direct vendor API keys alongside OpenRouter. Config schema drives the router interface; schema upgrades shipped concurrently with provider work for richer transcripts from day one. See design decisions below. Completed as part of the CLI expansion work.
 
 | Decision | Rationale |
 |----------|-----------|
@@ -96,143 +26,25 @@ schema upgrades → routing smoke test.
 | Dynamic pricing from OpenRouter API | Model prices change weekly. Hardcoded pricing = constant maintenance. |
 | Config schema before router implementation | Config shape drives the router interface, not the other way around. |
 | Schema upgrades concurrent with provider work | Avoids migration later. Richer schema from the first multi-provider transcript. |
-| Topology/roles/RAG deferred to Phase 3+ | They're the research payload — deferred because plumbing isn't ready, not because they're optional. |
+| Topology/roles/RAG deferred | They're the research payload — deferred because plumbing isn't ready, not because they're optional. |
 
----
+### CLI Research Tools ✅
 
-### Phase 2: CLI Expansion ✅ COMPLETE
+Replay capability, markdown export, file input, ground-truth scoring, and cost tracking — the CLI became a complete research tool. Completed 2026-02-28 with 325+ tests.
 
-**Goal:** Replay capability, additional output formats, file input, ground truth
-scoring, and cost tracking. The CLI becomes a complete research tool.
+### Web GUI ✅
 
-**Completed:** 2026-02-28. All deliverables merged: replay, list/show, markdown
-output + --file, --ground-truth scoring, cost tracking, config commands,
-environment variable docs, ProviderCapabilities, pinned dependencies. 325+ tests.
+NiceGUI-based web interface with two modes: a power-tool debate view for running debates with live streaming, and a research dashboard for analyzing transcripts with convergence charts, influence heatmaps, and cost tracking.
 
-**Deliverables:**
-- `replay` command — re-run synthesis or add rounds to existing transcripts
-- `list` and `show` commands for transcript management
-- Markdown output format
-- `--file` flag for text extraction and context injection
-- `--ground-truth` flag with post-debate scoring
-- Cost tracking per debate (token counts, estimated cost by provider)
-- `config` command for managing defaults, providers, and routing
+**Cross-tool integration scaffolding** was added as a prerequisite: per-panelist context injection, round-level event hooks, and experiment metadata schema. These establish interface contracts for the broader research platform (CounterSignal, CounterAgent). See `Lab/Cross-Tool Research Directions.md` for the full context.
 
-**Done when:** Can replay past debates with different synthesizers, attach files
-to queries, score debates against known answers, and see per-debate cost
-breakdowns.
+### Documentation ✅
 
----
+Mintlify docs site with AI assistant, MCP server integration, and LLM-optimized content at [docs.mutual-dissent.dev](https://docs.mutual-dissent.dev).
 
-### Phase 3: Web GUI
+### Desktop App & Batch Mode — Planned
 
-**Goal:** NiceGUI-based web interface with two modes — a power-tool debate view
-for running debates and a research dashboard for analyzing transcripts.
-
-**Prerequisites (cross-tool integration scaffolding):**
-Before the Web UI work begins, scaffold the extension points that make Mutual
-Dissent viable as a research platform for CounterSignal and CounterAgent. These
-are small additions that establish interface contracts the research agenda
-depends on. See `Lab/Cross-Tool Research Directions.md` for the full context.
-
-- Per-panelist context injection — `context`/`pre_prompt` field on
-  `RoutedRequest`, passed through Orchestrator. Enables asymmetric panels
-  (one model gets RAG context or payload, others don't).
-- Round-level event hooks — `on_round_complete` callback/emitter on
-  Orchestrator. Consumers: Web UI live view and research instrumentation.
-- Experiment metadata schema — structured `experiment` key on
-  `DebateTranscript.metadata` for campaign tracking and cross-tool correlation.
-
-**Stack:**
-- NiceGUI >= 3.7 (Python, async-native, Tailwind built in)
-- WebSocket transport for live model response streaming
-- Same Orchestrator backend as CLI — no separate API server
-
-**Deliverables:**
-
-**Debate View (power tool):**
-- Dark mode, dense layout, monospace-heavy, minimal chrome
-- Split-pane model responses with live streaming as tokens arrive
-- Keyboard shortcuts: `Ctrl+Enter` submit, `Tab` panels, `/` focus query
-- Panel config bar: model toggles, round count, synthesizer picker
-- Inline diff: highlight changes between initial → reflection rounds
-- One-click re-run with different synthesizer
-
-**Research Dashboard (data focus):**
-- Transcript browser: search, filter by date/query/models, sort
-- Convergence visualization: model shift per round (bar/radar charts)
-- Influence heatmap: which models move which (NxN matrix)
-- Cost tracking: per-debate and cumulative spend by model and provider
-- Export: filtered transcript sets as JSON/CSV
-
-**Infrastructure:**
-- `mutual-dissent serve` command (with `--port`, `--host`, `--no-open`)
-- Config panel in web UI for provider keys and routing
-
-**Done when:** `mutual-dissent serve` opens a browser with a functional debate
-interface that streams responses live, and a dashboard that visualizes patterns
-across saved transcripts.
-
----
-
-### Phase 4: Documentation & Developer Experience
-
-**Goal:** Comprehensive, user-facing documentation powered by Mintlify with
-built-in AI assistant, MCP server integration, and LLM-optimized content.
-Documentation that teaches through examples, screenshots, and video — not just
-reference material.
-
-**Platform:** Mintlify (OSS program — Pro plan, free for non-commercial open
-source). Git-based workflow: markdown/MDX in-repo, GitHub sync to hosted docs
-site.
-
-**Deliverables:**
-
-*Infrastructure:*
-- Mintlify setup with GitHub sync from `docs/` directory
-- Custom domain (e.g., docs.mutual-dissent.dev)
-- AI Assistant configured and trained on project docs
-- MCP server for querying docs from Cursor, Claude, VS Code
-- `llms.txt` for AI-optimized content indexing
-
-*User-facing content:*
-- Quickstart guide — install, first debate, transcript walkthrough with
-  screenshots
-- CLI reference — all commands, flags, examples, terminal output screenshots
-- Transcript schema docs — JSON format, field reference, example transcripts
-- Config reference — TOML schema, provider setup, routing modes, environment
-  variables
-- Architecture overview — system diagram, data flow, extension points
-
-*Research & multimedia:*
-- Research methodology guide — using Mutual Dissent for AI behavior analysis
-- Video/GIF content — CLI workflow recordings, debate-in-action demos
-- Cross-repo docs consistency (CounterAgent, CounterSignal, mcp-audit)
-
-**Done when:** `docs.mutual-dissent.dev` (or equivalent) serves a complete,
-searchable documentation site with AI assistant. A new user can go from zero to
-running their first debate using only the docs.
-
----
-
-### Phase 5: Maturity
-
-**Goal:** Desktop packaging, advanced research tooling, alternative topologies,
-local model support, and public release polish.
-
-**Deliverables:**
-- Tauri 2 desktop wrapper (~5-15 MB native binary, system tray, global hotkey)
-- Transcript analysis tooling (convergence metrics, disagreement scoring,
-  influence quantification)
-- Alternative debate topologies (ring, star, adversarial)
-- Local model support via Ollama (hybrid panel: cloud + local)
-- Additional direct providers (OpenAI, Google, xAI, Groq) as demand warrants
-- Batch mode for running same query across multiple configurations
-- README, documentation, and examples suitable for public release
-
-**Done when:** Tool is useful as both a personal productivity tool and a research
-platform for multi-model behavior analysis. Desktop app available. Ready for
-public repo.
+Tauri 2 desktop wrapper, transcript analysis tooling, alternative debate topologies (ring, star, adversarial), local model support via Ollama, batch mode, and public release polish.
 
 ---
 
