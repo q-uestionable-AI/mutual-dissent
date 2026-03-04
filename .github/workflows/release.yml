@@ -27,6 +27,7 @@ jobs:
         with:
           name: python-package-distributions
           path: dist/
+          if-no-files-found: error
 
   publish-to-testpypi:
     name: Publish to TestPyPI
