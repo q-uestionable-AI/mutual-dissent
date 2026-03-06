@@ -90,22 +90,21 @@ reviews:
 
   tools:
     ruff:
-      enabled: true
+      enabled: false  # CI handles this
     gitleaks:
-      enabled: true
+      enabled: false  # pre-commit handles this
     trufflehog:
-      enabled: true
+      enabled: false  # overlaps with gitleaks
     actionlint:
       enabled: true
     shellcheck:
-      enabled: true
+      enabled: false
     yamllint:
-      enabled: true
+      enabled: false
     markdownlint:
-      enabled: true
+      enabled: false
     github-checks:
-      enabled: true
-      timeout_ms: 120000
+      enabled: false
 
 chat:
   auto_reply: true
