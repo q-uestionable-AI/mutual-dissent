@@ -498,6 +498,13 @@ async def _compute_stats(
     if transcript.synthesis:
         all_responses.append(transcript.synthesis)
 
+    # Pre-fetch pricing to avoid N+1 queries in the loop
+    pricing_map = {}
+    if pricing_cache is not None:
+        unique_model_ids = {r.model_id for r in all_responses}
+        for model_id in unique_model_ids:
+            pricing_map[model_id] = await pricing_cache.get_pricing(model_id)
+
     for r in all_responses:
         tokens = r.token_count or 0
         total_tokens += tokens
@@ -518,7 +525,7 @@ async def _compute_stats(
 
         # Compute per-response cost.
         if pricing_cache is not None:
-            pricing = await pricing_cache.get_pricing(r.model_id)
+            pricing = pricing_map.get(r.model_id)
             cost = compute_response_cost(r, pricing)
             if cost is not None:
                 entry["cost_usd"] += cost
