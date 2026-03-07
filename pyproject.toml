@@ -31,6 +31,7 @@ dependencies = [
 Homepage = "https://richardspicer.io"
 Repository = "https://github.com/q-uestionable-AI/mutual-dissent"
 Issues = "https://github.com/q-uestionable-AI/mutual-dissent/issues"
+Documentation = "https://github.com/q-uestionable-AI/mutual-dissent/tree/main/docs"
 
 [project.scripts]
 mutual-dissent = "mutual_dissent.cli:main"
