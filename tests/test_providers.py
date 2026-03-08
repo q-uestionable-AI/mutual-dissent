@@ -311,6 +311,48 @@ class TestErrorHandling:
         assert result.content == ""
 
     @pytest.mark.asyncio
+    async def test_connect_error_returns_error_response(self) -> None:
+        """ConnectError is caught and returned as an error ModelResponse."""
+        provider = OpenRouterProvider(api_key="sk-or-test")
+        async with provider:
+            assert provider._client is not None
+            provider._client.post = AsyncMock(
+                side_effect=httpx.ConnectError("Connection refused"),
+            )
+
+            result = await provider.complete(
+                "model/down",
+                prompt="Hello",
+                model_alias="down",
+            )
+
+        assert isinstance(result, ModelResponse)
+        assert result.error is not None
+        assert "ConnectError" in result.error
+        assert result.content == ""
+
+    @pytest.mark.asyncio
+    async def test_read_error_returns_error_response(self) -> None:
+        """ReadError is caught and returned as an error ModelResponse."""
+        provider = OpenRouterProvider(api_key="sk-or-test")
+        async with provider:
+            assert provider._client is not None
+            provider._client.post = AsyncMock(
+                side_effect=httpx.ReadError("Connection reset"),
+            )
+
+            result = await provider.complete(
+                "model/flaky",
+                prompt="Hello",
+                model_alias="flaky",
+            )
+
+        assert isinstance(result, ModelResponse)
+        assert result.error is not None
+        assert "ReadError" in result.error
+        assert result.content == ""
+
+    @pytest.mark.asyncio
     async def test_malformed_response_body(self) -> None:
         """Response with unexpected structure still returns a ModelResponse."""
         resp = MagicMock(spec=httpx.Response)
