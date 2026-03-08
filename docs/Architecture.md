@@ -190,17 +190,17 @@ class Provider(ABC):
 
 ### Providers
 
-| Provider | Module | Auth | Endpoint | Models |
-|----------|--------|------|----------|--------|
-| OpenRouter | `providers/openrouter.py` | Bearer token | `openrouter.ai/api/v1/chat/completions` | All (unified) |
-| Anthropic | `providers/anthropic.py` | `x-api-key` header | `api.anthropic.com/v1/messages` | Claude family |
-| OpenAI | `providers/openai.py` | Bearer token | `api.openai.com/v1/chat/completions` | GPT family |
-| Google | `providers/google.py` | API key param | `generativelanguage.googleapis.com` | Gemini family |
-| xAI | `providers/xai.py` | Bearer token | `api.x.ai/v1/chat/completions` | Grok family |
-| Groq | `providers/groq.py` | Bearer token | `api.groq.com/openai/v1/chat/completions` | Llama, Mixtral, DeepSeek |
-| Ollama | `providers/ollama.py` | None (local) | `http://10.0.40.20:11434/api/chat` | Open-weight models |
+| Provider | Module | Status | Auth | Endpoint | Models |
+|----------|--------|--------|------|----------|--------|
+| OpenRouter | `providers/openrouter.py` | **Implemented** | Bearer token | `openrouter.ai/api/v1/chat/completions` | All (unified) |
+| Anthropic | `providers/anthropic.py` | **Implemented** | `x-api-key` header | `api.anthropic.com/v1/messages` | Claude family |
+| OpenAI | `providers/openai.py` | **Planned** | Bearer token | `api.openai.com/v1/chat/completions` | GPT family |
+| Google | `providers/google.py` | **Planned** | API key param | `generativelanguage.googleapis.com` | Gemini family |
+| xAI | `providers/xai.py` | **Planned** | Bearer token | `api.x.ai/v1/chat/completions` | Grok family |
+| Groq | `providers/groq.py` | **Planned** | Bearer token | `api.groq.com/openai/v1/chat/completions` | Llama, Mixtral, DeepSeek |
+| Ollama | `providers/ollama.py` | **Planned** | None (local) | `http://10.0.40.20:11434/api/chat` | Open-weight models |
 
-**Implementation order:** OpenRouter (refactor from existing client.py) → Anthropic → others as needed.
+**Implementation status:** OpenRouter and Anthropic direct are implemented. OpenAI, Google, xAI, and Groq models are routable today via OpenRouter aliases. Ollama is not yet routable. Additional direct providers will be added as needed.
 
 Each provider normalizes vendor-specific response formats into `ModelResponse`. The Orchestrator never sees raw API responses.
 
@@ -227,7 +227,9 @@ class ProviderRouter:
     Supports three routing modes per model alias:
     - "auto" (default): Use direct provider if API key is available,
       fall back to OpenRouter.
-    - "direct": Use the vendor's native API only. Error if no key.
+    - "direct": Prefer the vendor's native API. Falls back to
+      OpenRouter with a warning log if the API key is missing or
+      no direct provider implementation exists.
     - "openrouter": Always route through OpenRouter regardless of
       available direct keys.
 
@@ -236,9 +238,11 @@ class ProviderRouter:
     """
 ```
 
-For `complete_parallel()`, the router groups requests by resolved provider, fans
-out each group to its provider's `complete_parallel()`, then reassembles results
-in the original request order.
+For `complete_parallel()`, the router fans out all requests in parallel via
+`asyncio.gather()` over individual `complete()` calls. Each request is
+independently routed, so different requests in the same batch can go to
+different providers. Neither the router nor any provider implements
+grouped-by-provider batching — all parallelism is plain gather.
 
 ### Routing Resolution
 
@@ -251,14 +255,17 @@ Model alias → vendor mapping (hardcoded: claude→anthropic, gpt→openai, etc
          ▼              ▼                ▼
       "direct"        "auto"       "openrouter"
          │              │                │
-         │          Key exists?          │
-         │         ┌────┴────┐           │
-         │         ▼         ▼           │
-         │        Yes        No          │
-         │         │         │           │
-         ▼         ▼         ▼           ▼
-       Direct   Direct   OpenRouter  OpenRouter
-      Provider Provider   Provider    Provider
+    Key + provider  Key + provider       │
+      exists?         exists?            │
+     ┌───┴────┐    ┌────┴────┐           │
+     ▼        ▼    ▼         ▼           │
+    Yes       No  Yes        No          │
+     │        │    │         │           │
+     ▼        ▼    ▼         ▼           ▼
+   Direct  OpenRouter* Direct  OpenRouter  OpenRouter
+  Provider  Provider  Provider  Provider    Provider
+
+  * Falls back with warning log
 ```
 
 ---
