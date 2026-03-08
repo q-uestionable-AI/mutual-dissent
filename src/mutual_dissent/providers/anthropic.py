@@ -155,6 +155,16 @@ class AnthropicProvider(Provider):
                 latency_ms=elapsed_ms,
                 error=f"Request timed out after {self._timeout}s",
             )
+        except httpx.HTTPError as exc:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            return ModelResponse(
+                model_id=model_id,
+                model_alias=alias,
+                round_number=round_number,
+                content="",
+                latency_ms=elapsed_ms,
+                error=f"Transport error: {type(exc).__name__}: {exc}",
+            )
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
