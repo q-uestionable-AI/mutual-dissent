@@ -86,25 +86,27 @@ def _render_defaults_section(state: dict[str, Any]) -> None:
     """
     alias_options = list(DEFAULT_MODEL_ALIASES_V2.keys())
 
-    with ui.expansion("Debate Defaults", icon="tune").classes("w-full"):
-        with ui.card().classes("w-full p-6 bg-zinc-900 border border-zinc-700"):
-            ui.select(
-                label="Panel models",
-                options=alias_options,
-                multiple=True,
-            ).bind_value(state, "panel").props("outlined dense").classes("w-full")
+    with (
+        ui.expansion("Debate Defaults", icon="tune").classes("w-full"),
+        ui.card().classes("w-full p-6 bg-zinc-900 border border-zinc-700"),
+    ):
+        ui.select(
+            label="Panel models",
+            options=alias_options,
+            multiple=True,
+        ).bind_value(state, "panel").props("outlined dense").classes("w-full")
 
-            ui.select(
-                label="Synthesizer",
-                options=alias_options,
-            ).bind_value(state, "synthesizer").props("outlined dense").classes("w-full")
+        ui.select(
+            label="Synthesizer",
+            options=alias_options,
+        ).bind_value(state, "synthesizer").props("outlined dense").classes("w-full")
 
-            ui.number(
-                label="Reflection rounds",
-                min=1,
-                max=3,
-                step=1,
-            ).bind_value(state, "rounds").props("outlined dense").classes("w-full")
+        ui.number(
+            label="Reflection rounds",
+            min=1,
+            max=3,
+            step=1,
+        ).bind_value(state, "rounds").props("outlined dense").classes("w-full")
 
 
 def _render_providers_section(state: dict[str, Any]) -> None:
@@ -117,38 +119,40 @@ def _render_providers_section(state: dict[str, Any]) -> None:
         state: Mutable form state dict with keys ``providers`` and
             ``provider_sources``.
     """
-    with ui.expansion("Provider API Keys", icon="key").classes("w-full"):
-        with ui.card().classes("w-full p-6 bg-zinc-900 border border-zinc-700"):
-            for provider in _PROVIDERS:
-                env_var = _PROVIDER_ENV_MAP.get(provider, "")
-                source = state["provider_sources"].get(provider, "none")
-                has_key = bool(state["providers"].get(provider, ""))
+    with (
+        ui.expansion("Provider API Keys", icon="key").classes("w-full"),
+        ui.card().classes("w-full p-6 bg-zinc-900 border border-zinc-700"),
+    ):
+        for provider in _PROVIDERS:
+            env_var = _PROVIDER_ENV_MAP.get(provider, "")
+            source = state["provider_sources"].get(provider, "none")
+            has_key = bool(state["providers"].get(provider, ""))
 
-                with ui.row().classes("items-center gap-2 w-full"):
-                    # Status icon
-                    if has_key:
-                        ui.icon("check_circle").classes("text-emerald-400")
-                    else:
-                        ui.icon("cancel").classes("text-red-400")
+            with ui.row().classes("items-center gap-2 w-full"):
+                # Status icon
+                if has_key:
+                    ui.icon("check_circle").classes("text-emerald-400")
+                else:
+                    ui.icon("cancel").classes("text-red-400")
 
-                    if source == "env":
-                        # Read-only: key from environment variable
-                        ui.input(
-                            label=(f"{provider} (from environment: {env_var})"),
-                            password=True,
-                            password_toggle_button=True,
-                            value=state["providers"].get(provider, ""),
-                        ).props("readonly outlined dense").classes("flex-grow")
-                    else:
-                        # Editable: key from file or not set
-                        hint = f"or set {env_var}" if env_var else ""
-                        ui.input(
-                            label=f"{provider}",
-                            password=True,
-                            password_toggle_button=True,
-                        ).bind_value(state["providers"], provider).props(
-                            "outlined dense" + (f' hint="{hint}"' if hint else "")
-                        ).classes("flex-grow")
+                if source == "env":
+                    # Read-only: key from environment variable
+                    ui.input(
+                        label=(f"{provider} (from environment: {env_var})"),
+                        password=True,
+                        password_toggle_button=True,
+                        value=state["providers"].get(provider, ""),
+                    ).props("readonly outlined dense").classes("flex-grow")
+                else:
+                    # Editable: key from file or not set
+                    hint = f"or set {env_var}" if env_var else ""
+                    ui.input(
+                        label=f"{provider}",
+                        password=True,
+                        password_toggle_button=True,
+                    ).bind_value(state["providers"], provider).props(
+                        "outlined dense" + (f' hint="{hint}"' if hint else "")
+                    ).classes("flex-grow")
 
 
 def _update_routing_override(state: dict[str, Any], alias: str, value: str) -> None:
@@ -180,27 +184,29 @@ def _render_routing_section(state: dict[str, Any]) -> None:
     alias_keys = list(DEFAULT_MODEL_ALIASES_V2.keys())
     override_options = ["(use default)"] + _ROUTING_MODES
 
-    with ui.expansion("Routing Mode", icon="alt_route").classes("w-full"):
-        with ui.card().classes("w-full p-6 bg-zinc-900 border border-zinc-700"):
-            ui.select(
-                label="Default routing mode",
-                options=_ROUTING_MODES,
-            ).bind_value(state["routing"], "default_mode").props("outlined dense").classes("w-full")
+    with (
+        ui.expansion("Routing Mode", icon="alt_route").classes("w-full"),
+        ui.card().classes("w-full p-6 bg-zinc-900 border border-zinc-700"),
+    ):
+        ui.select(
+            label="Default routing mode",
+            options=_ROUTING_MODES,
+        ).bind_value(state["routing"], "default_mode").props("outlined dense").classes("w-full")
 
-            ui.separator()
-            ui.label("Per-model overrides").classes("text-sm text-zinc-400")
+        ui.separator()
+        ui.label("Per-model overrides").classes("text-sm text-zinc-400")
 
-            for alias in alias_keys:
-                current = state["routing"].get(alias, "(use default)")
+        for alias in alias_keys:
+            current = state["routing"].get(alias, "(use default)")
 
-                with ui.row().classes("items-center gap-2 w-full"):
-                    ui.label(alias).classes("w-24 font-mono")
-                    ui.select(
-                        label=f"{alias} routing",
-                        options=override_options,
-                        value=current,
-                        on_change=lambda e, a=alias: _update_routing_override(state, a, e.value),
-                    ).props("outlined dense").classes("flex-grow")
+            with ui.row().classes("items-center gap-2 w-full"):
+                ui.label(alias).classes("w-24 font-mono")
+                ui.select(
+                    label=f"{alias} routing",
+                    options=override_options,
+                    value=current,
+                    on_change=lambda e, a=alias: _update_routing_override(state, a, e.value),
+                ).props("outlined dense").classes("flex-grow")
 
 
 def _render_aliases_section(state: dict[str, Any]) -> None:
@@ -212,25 +218,27 @@ def _render_aliases_section(state: dict[str, Any]) -> None:
     Args:
         state: Mutable form state dict with key ``aliases``.
     """
-    with ui.expansion("Model Aliases", icon="label").classes("w-full"):
-        with ui.card().classes("w-full p-6 bg-zinc-900 border border-zinc-700"):
-            # Header row
-            with ui.row().classes("items-center gap-2 w-full"):
-                ui.label("Alias").classes("w-24 font-bold text-sm")
-                ui.label("OpenRouter ID").classes("flex-grow font-bold text-sm")
-                ui.label("Direct ID").classes("flex-grow font-bold text-sm")
+    with (
+        ui.expansion("Model Aliases", icon="label").classes("w-full"),
+        ui.card().classes("w-full p-6 bg-zinc-900 border border-zinc-700"),
+    ):
+        # Header row
+        with ui.row().classes("items-center gap-2 w-full"):
+            ui.label("Alias").classes("w-24 font-bold text-sm")
+            ui.label("OpenRouter ID").classes("flex-grow font-bold text-sm")
+            ui.label("Direct ID").classes("flex-grow font-bold text-sm")
 
-            # Data rows
-            for alias in sorted(state["aliases"].keys()):
-                ids = state["aliases"][alias]
-                with ui.row().classes("items-center gap-2 w-full"):
-                    ui.label(alias).classes("w-24 font-mono")
-                    ui.input(
-                        label="OpenRouter",
-                    ).bind_value(ids, "openrouter").props("outlined dense").classes("flex-grow")
-                    ui.input(
-                        label="Direct",
-                    ).bind_value(ids, "direct").props("outlined dense").classes("flex-grow")
+        # Data rows
+        for alias in sorted(state["aliases"].keys()):
+            ids = state["aliases"][alias]
+            with ui.row().classes("items-center gap-2 w-full"):
+                ui.label(alias).classes("w-24 font-mono")
+                ui.input(
+                    label="OpenRouter",
+                ).bind_value(ids, "openrouter").props("outlined dense").classes("flex-grow")
+                ui.input(
+                    label="Direct",
+                ).bind_value(ids, "direct").props("outlined dense").classes("flex-grow")
 
 
 # OpenRouter model-ID prefix → provider key in the config providers dict.
@@ -444,8 +452,10 @@ async def _handle_test_providers(
             decision = result["decision"]
             response = result["response"]
 
-            assert isinstance(decision, RoutingDecision)
-            assert isinstance(response, ModelResponse)
+            if not isinstance(decision, RoutingDecision):
+                raise TypeError(f"Expected RoutingDecision, got {type(decision).__name__}")
+            if not isinstance(response, ModelResponse):
+                raise TypeError(f"Expected ModelResponse, got {type(response).__name__}")
 
             vendor_str = decision.vendor.value
             route_str = "openrouter" if decision.via_openrouter else "direct"

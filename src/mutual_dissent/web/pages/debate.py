@@ -217,14 +217,14 @@ def render() -> None:
     state = _DebateState()
 
     with ui.row().classes("w-full h-full gap-0"):
-        with ui.column().classes(
-            "w-1/4 min-w-[280px] max-w-[360px] p-4 bg-zinc-900 "
-            "border-r border-zinc-700 gap-4 h-[calc(100vh-120px)] overflow-y-auto"
+        with (
+            ui.column().classes(
+                "w-1/4 min-w-[280px] max-w-[360px] p-4 bg-zinc-900 "
+                "border-r border-zinc-700 gap-4 h-[calc(100vh-120px)] overflow-y-auto"
+            ),
+            ui.card().classes("w-full h-full p-6 bg-zinc-900 border border-zinc-700 rounded-2xl"),
         ):
-            with ui.card().classes(
-                "w-full h-full p-6 bg-zinc-900 border border-zinc-700 rounded-2xl"
-            ):
-                form = _render_form_panel(config)
+            form = _render_form_panel(config)
 
         with (
             ui.column()
@@ -297,7 +297,10 @@ def render() -> None:
                 status.status_label.update()
 
                 if debate_round.round_type == "synthesis":
-                    assert isinstance(debate_round.responses, list)
+                    if not isinstance(debate_round.responses, list):
+                        raise TypeError(
+                            f"Expected list, got {type(debate_round.responses).__name__}"
+                        )
                     synthesis = debate_round.responses[0]
                     with status.response_container:
                         ui.separator().classes("my-4 animate-fade-in")
@@ -305,14 +308,13 @@ def render() -> None:
                             render_synthesis_section(synthesis)
                 else:
                     state.completed_rounds.append(debate_round)
-                    with status.response_container:
-                        with ui.column().classes("animate-fade-in"):
-                            render_round_panel(
-                                debate_round,
-                                list(state.completed_rounds),
-                                show_diff=state.show_diff,
-                                default_open=True,
-                            )
+                    with status.response_container, ui.column().classes("animate-fade-in"):
+                        render_round_panel(
+                            debate_round,
+                            list(state.completed_rounds),
+                            show_diff=state.show_diff,
+                            default_open=True,
+                        )
 
                 await _scroll_to_bottom()
             except Exception:
@@ -400,9 +402,14 @@ def render() -> None:
         action = getattr(e, "action", None)
         modifiers = getattr(e, "modifiers", None) or {}
 
-        if action and getattr(action, "keydown", False):
-            if key and getattr(key, "enter", False) and modifiers.get("ctrl", False):
-                asyncio.create_task(on_submit())
+        if (
+            action
+            and getattr(action, "keydown", False)
+            and key
+            and getattr(key, "enter", False)
+            and modifiers.get("ctrl", False)
+        ):
+            asyncio.create_task(on_submit())
 
     ui.keyboard(on_key=on_keyboard)
 

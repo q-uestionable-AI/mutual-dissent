@@ -251,14 +251,14 @@ def render() -> None:
     ds = _DashboardState(all_summaries=list_transcripts(limit=0))
 
     with ui.row().classes("w-full h-full gap-0"):
-        with ui.column().classes(
-            "w-1/4 min-w-[260px] max-w-[340px] p-4 bg-zinc-900 "
-            "border-r border-zinc-700 gap-3 h-[calc(100vh-120px)] overflow-y-auto"
+        with (
+            ui.column().classes(
+                "w-1/4 min-w-[260px] max-w-[340px] p-4 bg-zinc-900 "
+                "border-r border-zinc-700 gap-3 h-[calc(100vh-120px)] overflow-y-auto"
+            ),
+            ui.card().classes("w-full h-full p-6 bg-zinc-900 border border-zinc-700 rounded-2xl"),
         ):
-            with ui.card().classes(
-                "w-full h-full p-6 bg-zinc-900 border border-zinc-700 rounded-2xl"
-            ):
-                controls = _build_filter_panel()
+            controls = _build_filter_panel()
 
         right_panel = ui.column().classes("flex-1 p-6 gap-4 h-[calc(100vh-120px)] overflow-y-auto")
 
